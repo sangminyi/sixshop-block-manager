@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sixshop Block Manager</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f7;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 720px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: #1d1d1f;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    input[type="email"],
+    input[type="password"],
+    input[type="text"],
+    textarea {
+      width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+      margin-bottom: 16px;
+    }
+
+    input:focus, textarea:focus {
+      border-color: #0071e3;
+    }
+
+    textarea {
+      font-family: "SF Mono", "Fira Code", Consolas, monospace;
+      font-size: 0.85rem;
+      resize: vertical;
+      min-height: 200px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    button[type="submit"] {
+      width: 100%;
+      padding: 12px;
+      background: #0071e3;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button[type="submit"]:hover { background: #0077ed; }
+    button[type="submit"]:disabled { background: #a0c4f1; cursor: not-allowed; }
+
+    input:disabled {
+      background: #f5f5f7;
+      color: #aaa;
+      cursor: not-allowed;
+    }
+
+    .hint {
+      font-size: 0.78rem;
+      color: #999;
+      margin-top: -12px;
+      margin-bottom: 16px;
+    }
+
+    #log {
+      display: none;
+      background: #1e1e1e;
+      border-radius: 12px;
+      padding: 20px;
+      color: #ccc;
+      font-family: "SF Mono", "Fira Code", Consolas, monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+
+    .log-line { margin-bottom: 4px; }
+    .log-line.info::before  { content: "› "; color: #888; }
+    .log-line.success::before { content: "✓ "; color: #4caf50; }
+    .log-line.error::before { content: "✗ "; color: #f44336; }
+    .log-line.success { color: #a5d6a7; }
+    .log-line.error   { color: #ef9a9a; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Sixshop Block Manager</h1>
+
+    <div class="card">
+      <form id="form">
+        <div class="row">
+          <div>
+            <label for="email">이메일 (Email)</label>
+            <input type="email" id="email" name="email" placeholder="you@example.com" required />
+          </div>
+          <div>
+            <label for="password">비밀번호 (Password)</label>
+            <input type="password" id="password" name="password" placeholder="••••••••" required />
+          </div>
+        </div>
+
+        <label for="blockId">블록 ID (Block ID) — 업데이트 시 입력</label>
+        <input type="text" id="blockId" name="blockId" placeholder="Leave empty to create a new block" />
+
+        <label for="blockName">블록 이름 (Block Name) — 신규 생성 시 입력</label>
+        <input type="text" id="blockName" name="blockName" placeholder="my-block" />
+        <p class="hint">Block ID가 있으면 Block Name은 무시됩니다.</p>
+
+        <label for="blockCode">블록 코드 (Block Code)</label>
+        <textarea id="blockCode" name="blockCode" placeholder="<!-- paste your code here -->" required></textarea>
+
+        <button type="submit" id="submitBtn">블록 업로드 시작</button>
+      </form>
+    </div>
+
+    <div id="log"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById("form");
+    const log  = document.getElementById("log");
+    const btn  = document.getElementById("submitBtn");
+
+    function appendLog(text, status) {
+      const line = document.createElement("div");
+      line.className = `log-line ${status}`;
+      line.textContent = text;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    const blockIdInput   = document.getElementById("blockId");
+    const blockNameInput = document.getElementById("blockName");
+
+    function updateMode() {
+      const isUpdate = blockIdInput.value.trim() !== "";
+      blockNameInput.disabled = isUpdate;
+      btn.textContent = isUpdate ? "블록 업데이트 시작" : "블록 업로드 시작";
+    }
+
+    blockIdInput.addEventListener("input", updateMode);
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      log.innerHTML = "";
+      log.style.display = "block";
+      btn.disabled = true;
+      btn.textContent = "실행 중...";
+
+      const data = new FormData(form);
+
+      const response = await fetch("/run", { method: "POST", body: data });
+      const reader   = response.body.getReader();
+      const decoder  = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            const { text, status } = JSON.parse(line.slice(5).trim());
+            appendLog(text, status);
+          } catch (_) {}
+        }
+      }
+
+      btn.disabled = false;
+      updateMode();
+    });
+
+    // Allow Enter key in blockId / blockName to submit
+    [blockIdInput, blockNameInput].forEach(el => {
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); form.dispatchEvent(new Event("submit")); }
+      });
+    });
+  </script>
+</body>
+</html>
