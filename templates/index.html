@@ -17,10 +17,7 @@
       padding: 40px 16px;
     }
 
-    .container {
-      width: 100%;
-      max-width: 720px;
-    }
+    .container { width: 100%; max-width: 720px; }
 
     h1 {
       font-size: 1.5rem;
@@ -60,9 +57,7 @@
       margin-bottom: 16px;
     }
 
-    input:focus, textarea:focus {
-      border-color: #0071e3;
-    }
+    input:focus, textarea:focus { border-color: #0071e3; }
 
     input:disabled, textarea:disabled {
       background: #f8f8f8;
@@ -112,7 +107,7 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.12);
     }
 
-    /* Field header with preserve checkbox */
+    /* Field header with preserve checkbox or counter */
     .field-header {
       display: flex;
       justify-content: space-between;
@@ -120,9 +115,7 @@
       margin-bottom: 6px;
     }
 
-    .field-header label {
-      margin-bottom: 0;
-    }
+    .field-header label { margin-bottom: 0; }
 
     .preserve-label {
       display: flex;
@@ -135,6 +128,16 @@
       white-space: nowrap;
     }
 
+    .preserve-label input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      border: none;
+      margin-bottom: 0;
+      cursor: pointer;
+    }
+
+    /* Store/pair counters */
     .store-count {
       font-size: 0.78rem;
       color: #999;
@@ -148,13 +151,11 @@
       max-height: 200px;
     }
 
-    .preserve-label input[type="checkbox"] {
-      width: auto;
-      margin: 0;
-      padding: 0;
-      border: none;
-      margin-bottom: 0;
-      cursor: pointer;
+    .pair-counter-row {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: -10px;
+      margin-bottom: 16px;
     }
 
     /* Submit button */
@@ -208,10 +209,7 @@
       margin-bottom: 12px;
     }
 
-    .confirm-actions {
-      display: flex;
-      gap: 10px;
-    }
+    .confirm-actions { display: flex; gap: 10px; }
 
     .btn-cancel {
       flex: 1;
@@ -271,6 +269,8 @@
 
     <div class="card">
       <form id="form">
+        <input type="hidden" id="modeInput" name="mode" value="create" />
+
         <div class="mode-toggle">
           <button type="button" id="modeCreate" class="active">신규 생성 (Create)</button>
           <button type="button" id="modeUpdate">업데이트 (Update)</button>
@@ -312,11 +312,19 @@
 
         <!-- UPDATE FIELDS -->
         <div id="updateFields" style="display:none">
-          <label for="storeIdUpdate">스토어 ID (Store ID)</label>
-          <input type="text" id="storeIdUpdate" name="storeId" placeholder="your-store-id" autocomplete="off" />
-
-          <label for="blockId">블록 ID (Block ID)</label>
-          <input type="text" id="blockId" name="blockId" placeholder="block-id" />
+          <div class="row">
+            <div>
+              <label>스토어 ID (Store IDs)</label>
+              <textarea id="storeIdsUpdate" name="storeIdsUpdate" class="store-ids" placeholder="sangmin&#10;store2"></textarea>
+            </div>
+            <div>
+              <label>블록 ID (Block IDs)</label>
+              <textarea id="blockIdsUpdate" name="blockIdsUpdate" class="store-ids" placeholder="69ac30ec&#10;69ac30ed"></textarea>
+            </div>
+          </div>
+          <div class="pair-counter-row">
+            <span id="updatePairCount" class="store-count">0 / 100 pairs</span>
+          </div>
 
           <div class="field-header">
             <label for="blockTitleUpdate">블록 이름 변경 (Block Name)</label>
@@ -354,14 +362,22 @@
 
         <!-- DELETE FIELDS -->
         <div id="deleteFields" style="display:none">
-          <label for="storeIdDelete">스토어 ID (Store ID)</label>
-          <input type="text" id="storeIdDelete" name="storeId" placeholder="your-store-id" autocomplete="off" />
-
-          <label for="blockIdDelete">블록 ID (Block ID)</label>
-          <input type="text" id="blockIdDelete" name="deleteBlockId" placeholder="block-id" />
+          <div class="row">
+            <div>
+              <label>스토어 ID (Store IDs)</label>
+              <textarea id="storeIdsDelete" name="storeIdsDelete" class="store-ids" placeholder="sangmin&#10;store2"></textarea>
+            </div>
+            <div>
+              <label>블록 ID (Block IDs)</label>
+              <textarea id="blockIdsDelete" name="blockIdsDelete" class="store-ids" placeholder="69ac30ec&#10;69ac30ed"></textarea>
+            </div>
+          </div>
+          <div class="pair-counter-row">
+            <span id="deletePairCount" class="store-count">0 / 100 pairs</span>
+          </div>
 
           <div id="deleteConfirmBox" class="confirm-box" style="display:none">
-            <p>이 블록을 정말 삭제하시겠습니까?</p>
+            <p id="deleteConfirmMsg">이 블록들을 정말 삭제하시겠습니까?</p>
             <div class="confirm-actions">
               <button type="button" id="cancelDeleteBtn" class="btn-cancel">취소</button>
               <button type="button" id="confirmDeleteBtn" class="btn-danger">삭제 확인</button>
@@ -378,34 +394,92 @@
   </div>
 
   <script>
-    const storeIdsEl  = document.getElementById("storeIds");
-    const storeCountEl = document.getElementById("storeCount");
-    const form             = document.getElementById("form");
-    const log              = document.getElementById("log");
-    const submitBtn        = document.getElementById("submitBtn");
-    const deleteBtn        = document.getElementById("deleteBtn");
-    const createFields     = document.getElementById("createFields");
-    const updateFields     = document.getElementById("updateFields");
-    const deleteFields     = document.getElementById("deleteFields");
-    const modeCreate       = document.getElementById("modeCreate");
-    const modeUpdate       = document.getElementById("modeUpdate");
-    const modeDelete       = document.getElementById("modeDelete");
+    const storeIdsEl    = document.getElementById("storeIds");
+    const storeCountEl  = document.getElementById("storeCount");
+    const form          = document.getElementById("form");
+    const log           = document.getElementById("log");
+    const submitBtn     = document.getElementById("submitBtn");
+    const deleteBtn     = document.getElementById("deleteBtn");
+    const createFields  = document.getElementById("createFields");
+    const updateFields  = document.getElementById("updateFields");
+    const deleteFields  = document.getElementById("deleteFields");
+    const modeCreate    = document.getElementById("modeCreate");
+    const modeUpdate    = document.getElementById("modeUpdate");
+    const modeDelete    = document.getElementById("modeDelete");
     const deleteConfirmBox = document.getElementById("deleteConfirmBox");
+    const modeInput     = document.getElementById("modeInput");
 
     let currentMode = "create";
 
+    // ── Store count (Create) ────────────────────────────────────
     function updateStoreCount() {
       const ids = storeIdsEl.value.split("\n").map(s => s.trim()).filter(Boolean);
       const count = ids.length;
       storeCountEl.textContent = `${count} / 100`;
       storeCountEl.classList.toggle("over", count > 100);
-      if (currentMode === "create") {
-        submitBtn.textContent = count > 0 ? `블록 생성 시작 (${Math.min(count, 100)}개 스토어)` : "블록 생성 시작";
-      }
+      submitBtn.textContent = count > 0
+        ? `블록 생성 시작 (${Math.min(count, 100)}개 스토어)`
+        : "블록 생성 시작";
     }
 
     storeIdsEl.addEventListener("input", updateStoreCount);
 
+    // ── Pair helpers ────────────────────────────────────────────
+    function parsePairs(storeEl, blockEl) {
+      const storeIds = storeEl.value.split("\n").map(s => s.trim()).filter(Boolean);
+      const blockIds = blockEl.value.split("\n").map(s => s.trim()).filter(Boolean);
+      const count = storeIds.length;
+      const mismatch = storeIds.length !== blockIds.length;
+      const over = count > 100;
+      const valid = count > 0 && !mismatch && !over;
+      return { storeIds, blockIds, count, mismatch, over, valid };
+    }
+
+    function renderPairCount(el, storeIds, blockIds, count, mismatch, over) {
+      if (count === 0 && blockIds.length === 0) {
+        el.textContent = "0 / 100 pairs";
+        el.classList.remove("over");
+      } else if (mismatch) {
+        el.textContent = `불일치 (스토어 ${storeIds.length} / 블록 ${blockIds.length})`;
+        el.classList.add("over");
+      } else {
+        el.textContent = `${count} / 100 pairs`;
+        el.classList.toggle("over", over);
+      }
+    }
+
+    // ── Update pair counter ─────────────────────────────────────
+    function updateUpdatePairCount() {
+      const { storeIds, blockIds, count, mismatch, over, valid } =
+        parsePairs(document.getElementById("storeIdsUpdate"), document.getElementById("blockIdsUpdate"));
+      renderPairCount(document.getElementById("updatePairCount"), storeIds, blockIds, count, mismatch, over);
+      if (currentMode === "update") {
+        submitBtn.textContent = valid ? `블록 업데이트 시작 (${count}개)` : "블록 업데이트 시작";
+        updateSubmitState();
+      }
+    }
+
+    ["storeIdsUpdate", "blockIdsUpdate"].forEach(id => {
+      document.getElementById(id).addEventListener("input", updateUpdatePairCount);
+    });
+
+    // ── Delete pair counter ─────────────────────────────────────
+    function updateDeletePairCount() {
+      const { storeIds, blockIds, count, mismatch, over, valid } =
+        parsePairs(document.getElementById("storeIdsDelete"), document.getElementById("blockIdsDelete"));
+      renderPairCount(document.getElementById("deletePairCount"), storeIds, blockIds, count, mismatch, over);
+      deleteBtn.disabled = !valid;
+      if (valid) {
+        document.getElementById("deleteConfirmMsg").textContent =
+          `${count}개의 블록을 정말 삭제하시겠습니까?`;
+      }
+    }
+
+    ["storeIdsDelete", "blockIdsDelete"].forEach(id => {
+      document.getElementById(id).addEventListener("input", updateDeletePairCount);
+    });
+
+    // ── Preserve checkboxes ─────────────────────────────────────
     function applyPreserveState() {
       document.getElementById("blockTitleUpdate").disabled   = document.getElementById("preserveTitle").checked;
       document.getElementById("blockCodeUpdate").disabled    = document.getElementById("preserveCode").checked;
@@ -417,7 +491,11 @@
       if (currentMode === "update") {
         const allPreserved = ["preserveTitle", "preserveCode", "preserveSettings", "preserveLibraries"]
           .every(id => document.getElementById(id).checked);
-        submitBtn.disabled = allPreserved;
+        const { valid } = parsePairs(
+          document.getElementById("storeIdsUpdate"),
+          document.getElementById("blockIdsUpdate"),
+        );
+        submitBtn.disabled = allPreserved || !valid;
       } else {
         submitBtn.disabled = false;
       }
@@ -430,8 +508,10 @@
       });
     });
 
+    // ── setMode ─────────────────────────────────────────────────
     function setMode(mode) {
       currentMode = mode;
+      modeInput.value = mode;
 
       modeCreate.classList.toggle("active", mode === "create");
       modeUpdate.classList.toggle("active", mode === "update");
@@ -442,24 +522,25 @@
       deleteFields.style.display = mode === "delete" ? "block" : "none";
 
       createFields.querySelectorAll("input, textarea").forEach(el => el.disabled = mode !== "create");
-      deleteFields.querySelectorAll("input").forEach(el => el.disabled = mode !== "delete");
+      deleteFields.querySelectorAll("input, textarea").forEach(el => el.disabled = mode !== "delete");
 
       if (mode === "update") {
         updateFields.querySelectorAll("input, textarea").forEach(el => el.disabled = false);
         applyPreserveState();
+        updateUpdatePairCount();
       } else {
         updateFields.querySelectorAll("input, textarea").forEach(el => el.disabled = true);
       }
 
       submitBtn.style.display = mode !== "delete" ? "block" : "none";
       deleteBtn.style.display = mode === "delete" ? "block" : "none";
-      updateSubmitState();
-
-      if (mode === "create") updateStoreCount();
-      else if (mode === "update") submitBtn.textContent = "블록 업데이트 시작";
-
       deleteConfirmBox.style.display = "none";
       deleteBtn.disabled = false;
+
+      if (mode === "create") updateStoreCount();
+      else if (mode === "delete") updateDeletePairCount();
+
+      updateSubmitState();
     }
 
     modeCreate.addEventListener("click", () => setMode("create"));
@@ -467,6 +548,7 @@
     modeDelete.addEventListener("click", () => setMode("delete"));
     setMode("create");
 
+    // ── Log helpers ─────────────────────────────────────────────
     function appendLog(text, status) {
       const line = document.createElement("div");
       line.className = `log-line ${status}`;
@@ -498,43 +580,44 @@
       if (onDone) onDone();
     }
 
-    function downloadLog(lines, blockName, storeCount) {
+    function downloadLog(lines, mode, headerExtras) {
       const now = new Date();
       const pad = n => String(n).padStart(2, "0");
       const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
       const fileStamp = dateStr.replace(" ", "_").replaceAll(":", "-");
 
-      const header = [
-        "Sixshop Block Manager — Create Log",
+      const modeLabel = { create: "Create", update: "Update", delete: "Delete" }[mode] || mode;
+      const headerLines = [
+        `Sixshop Block Manager — ${modeLabel} Log`,
         `Generated : ${dateStr}`,
-        `Block Name: ${blockName}`,
-        `Store IDs : ${storeCount}`,
+        ...headerExtras,
         "═".repeat(48),
-      ].join("\n");
+      ];
 
       const body = lines.map(({ text, status }) => {
         const prefix = status === "success" ? "✓" : status === "error" ? "✗" : "›";
         return `${prefix} ${text}`;
       }).join("\n");
 
-      const blob = new Blob([header + "\n" + body + "\n"], { type: "text/plain;charset=utf-8" });
+      const blob = new Blob([headerLines.join("\n") + "\n" + body + "\n"], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `block-create-${fileStamp}.txt`;
+      a.download = `block-${mode}-${fileStamp}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }
 
+    // ── Form submit (Create / Update) ───────────────────────────
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      // Clear inactive mode fields so they don't bleed into FormData
+      // Clear inactive fields so they don't bleed into FormData
       if (currentMode === "create") {
-        document.getElementById("storeIdUpdate").value = "";
-        document.getElementById("blockId").value = "";
+        document.getElementById("storeIdsUpdate").value = "";
+        document.getElementById("blockIdsUpdate").value = "";
         document.getElementById("blockTitleUpdate").value = "";
         document.getElementById("blockCodeUpdate").value = "";
         document.getElementById("settingsPropertyUpdate").value = "";
@@ -552,26 +635,37 @@
       submitBtn.disabled = true;
       submitBtn.textContent = "실행 중...";
 
-      const data = new FormData(form);
-      const isCreate = currentMode === "create";
       const logLines = [];
+      const snapMode = currentMode;
       const blockNameVal = document.getElementById("blockName").value.trim();
       const storeCountVal = storeIdsEl.value.split("\n").map(s => s.trim()).filter(Boolean).length;
+      const { count: pairCountVal } = parsePairs(
+        document.getElementById("storeIdsUpdate"),
+        document.getElementById("blockIdsUpdate"),
+      );
 
+      const data = new FormData(form);
       const response = await fetch("/run", { method: "POST", body: data });
       await streamSSE(
         response,
         () => {
-          submitBtn.disabled = false;
-          if (currentMode === "update") submitBtn.textContent = "블록 업데이트 시작";
-          else updateStoreCount();
-          if (isCreate) downloadLog(logLines, blockNameVal, storeCountVal);
+          if (snapMode === "update") {
+            updateUpdatePairCount();
+            updateSubmitState();
+          } else {
+            updateStoreCount();
+            updateSubmitState();
+          }
+          const extras = snapMode === "create"
+            ? [`Block Name: ${blockNameVal}`, `Store IDs : ${storeCountVal}`]
+            : [`Pairs     : ${pairCountVal}`];
+          downloadLog(logLines, snapMode, extras);
         },
-        isCreate ? (text, status) => logLines.push({ text, status }) : null,
+        (text, status) => logLines.push({ text, status }),
       );
     });
 
-    // Delete flow
+    // ── Delete flow ─────────────────────────────────────────────
     deleteBtn.addEventListener("click", () => {
       deleteConfirmBox.style.display = "block";
       deleteBtn.disabled = true;
@@ -579,7 +673,7 @@
 
     document.getElementById("cancelDeleteBtn").addEventListener("click", () => {
       deleteConfirmBox.style.display = "none";
-      deleteBtn.disabled = false;
+      updateDeletePairCount(); // re-enable deleteBtn if pairs still valid
     });
 
     document.getElementById("confirmDeleteBtn").addEventListener("click", async () => {
@@ -591,12 +685,24 @@
       deleteBtn.disabled = true;
       confirmBtn.disabled = true;
 
+      const logLines = [];
+      const { count: pairCountVal } = parsePairs(
+        document.getElementById("storeIdsDelete"),
+        document.getElementById("blockIdsDelete"),
+      );
+
       const data = new FormData(form);
       const response = await fetch("/delete", { method: "POST", body: data });
-      await streamSSE(response, () => {
-        deleteBtn.disabled = false;
-        confirmBtn.disabled = false;
-      });
+      await streamSSE(
+        response,
+        () => {
+          deleteBtn.disabled = false;
+          confirmBtn.disabled = false;
+          updateDeletePairCount();
+          downloadLog(logLines, "delete", [`Pairs     : ${pairCountVal}`]);
+        },
+        (text, status) => logLines.push({ text, status }),
+      );
     });
   </script>
 </body>
