@@ -77,6 +77,34 @@
       gap: 16px;
     }
 
+    /* Mode toggle */
+    .mode-toggle {
+      display: flex;
+      background: #f0f0f5;
+      border-radius: 10px;
+      padding: 4px;
+      margin-bottom: 24px;
+    }
+
+    .mode-toggle button {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      color: #888;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .mode-toggle button.active {
+      background: #fff;
+      color: #1d1d1f;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+
     button[type="submit"] {
       width: 100%;
       padding: 12px;
@@ -92,19 +120,6 @@
 
     button[type="submit"]:hover { background: #0077ed; }
     button[type="submit"]:disabled { background: #a0c4f1; cursor: not-allowed; }
-
-    input:disabled {
-      background: #f5f5f7;
-      color: #aaa;
-      cursor: not-allowed;
-    }
-
-    .hint {
-      font-size: 0.78rem;
-      color: #999;
-      margin-top: -12px;
-      margin-bottom: 16px;
-    }
 
     #log {
       display: none;
@@ -133,6 +148,11 @@
 
     <div class="card">
       <form id="form">
+        <div class="mode-toggle">
+          <button type="button" id="modeCreate" class="active">신규 생성 (Create)</button>
+          <button type="button" id="modeUpdate">업데이트 (Update)</button>
+        </div>
+
         <div class="row">
           <div>
             <label for="email">이메일 (Email)</label>
@@ -144,20 +164,26 @@
           </div>
         </div>
 
-        <label for="storeId">스토어 ID (Store ID)</label>
-        <input type="text" id="storeId" name="storeId" placeholder="your-store-id" autocomplete="off" required />
+        <div id="createFields">
+          <label for="storeId">스토어 ID (Store ID)</label>
+          <input type="text" id="storeId" name="storeId" placeholder="your-store-id" autocomplete="off" />
 
-        <label for="blockId">블록 ID (Block ID) — 업데이트 시 입력</label>
-        <input type="text" id="blockId" name="blockId" placeholder="Leave empty to create a new block" />
+          <label for="blockName">블록 이름 (Block Name)</label>
+          <input type="text" id="blockName" name="blockName" placeholder="my-block" />
 
-        <label for="blockName">블록 이름 (Block Name) — 신규 생성 시 입력</label>
-        <input type="text" id="blockName" name="blockName" placeholder="my-block" />
-        <p class="hint">Block ID가 있으면 Block Name은 무시됩니다.</p>
+          <label for="blockCodeCreate">블록 코드 (Block Code)</label>
+          <textarea id="blockCodeCreate" name="blockCode" placeholder="<!-- paste your code here -->"></textarea>
+        </div>
 
-        <label for="blockCode">블록 코드 (Block Code)</label>
-        <textarea id="blockCode" name="blockCode" placeholder="<!-- paste your code here -->" required></textarea>
+        <div id="updateFields" style="display:none">
+          <label for="blockId">블록 ID (Block ID)</label>
+          <input type="text" id="blockId" name="blockId" placeholder="block-id" />
 
-        <button type="submit" id="submitBtn">블록 업로드 시작</button>
+          <label for="blockCodeUpdate">블록 코드 (Block Code)</label>
+          <textarea id="blockCodeUpdate" name="blockCode" placeholder="<!-- paste your code here -->"></textarea>
+        </div>
+
+        <button type="submit" id="submitBtn">블록 생성 시작</button>
       </form>
     </div>
 
@@ -165,9 +191,30 @@
   </div>
 
   <script>
-    const form = document.getElementById("form");
-    const log  = document.getElementById("log");
-    const btn  = document.getElementById("submitBtn");
+    const form         = document.getElementById("form");
+    const log          = document.getElementById("log");
+    const btn          = document.getElementById("submitBtn");
+    const createFields = document.getElementById("createFields");
+    const updateFields = document.getElementById("updateFields");
+    const modeCreate   = document.getElementById("modeCreate");
+    const modeUpdate   = document.getElementById("modeUpdate");
+
+    let isUpdateMode = false;
+
+    function setMode(update) {
+      isUpdateMode = update;
+      modeCreate.classList.toggle("active", !update);
+      modeUpdate.classList.toggle("active", update);
+      createFields.style.display = update ? "none" : "block";
+      updateFields.style.display = update ? "block" : "none";
+      createFields.querySelectorAll("input, textarea").forEach(el => el.disabled = update);
+      updateFields.querySelectorAll("input, textarea").forEach(el => el.disabled = !update);
+      btn.textContent = update ? "블록 업데이트 시작" : "블록 생성 시작";
+    }
+
+    modeCreate.addEventListener("click", () => setMode(false));
+    modeUpdate.addEventListener("click", () => setMode(true));
+    setMode(false);
 
     function appendLog(text, status) {
       const line = document.createElement("div");
@@ -177,19 +224,18 @@
       log.scrollTop = log.scrollHeight;
     }
 
-    const blockIdInput   = document.getElementById("blockId");
-    const blockNameInput = document.getElementById("blockName");
-
-    function updateMode() {
-      const isUpdate = blockIdInput.value.trim() !== "";
-      blockNameInput.disabled = isUpdate;
-      btn.textContent = isUpdate ? "블록 업데이트 시작" : "블록 업로드 시작";
-    }
-
-    blockIdInput.addEventListener("input", updateMode);
-
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
+
+      // Ensure hidden mode fields don't bleed into submission
+      if (isUpdateMode) {
+        document.getElementById("storeId").value = "";
+        document.getElementById("blockName").value = "";
+        document.getElementById("blockCodeCreate").value = "";
+      } else {
+        document.getElementById("blockId").value = "";
+        document.getElementById("blockCodeUpdate").value = "";
+      }
 
       log.innerHTML = "";
       log.style.display = "block";
@@ -219,14 +265,7 @@
       }
 
       btn.disabled = false;
-      updateMode();
-    });
-
-    // Allow Enter key in blockId / blockName to submit
-    [blockIdInput, blockNameInput].forEach(el => {
-      el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); form.dispatchEvent(new Event("submit")); }
-      });
+      btn.textContent = isUpdateMode ? "블록 업데이트 시작" : "블록 생성 시작";
     });
   </script>
 </body>
