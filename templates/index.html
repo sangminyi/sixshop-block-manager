@@ -64,6 +64,13 @@
       border-color: #0071e3;
     }
 
+    input:disabled, textarea:disabled {
+      background: #f8f8f8;
+      color: #bbb;
+      cursor: not-allowed;
+      border-color: #eee;
+    }
+
     textarea {
       font-family: "SF Mono", "Fira Code", Consolas, monospace;
       font-size: 0.85rem;
@@ -105,6 +112,39 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.12);
     }
 
+    /* Field header with preserve checkbox */
+    .field-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .field-header label {
+      margin-bottom: 0;
+    }
+
+    .preserve-label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.78rem;
+      color: #999;
+      font-weight: 400;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .preserve-label input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      border: none;
+      margin-bottom: 0;
+      cursor: pointer;
+    }
+
+    /* Submit button */
     button[type="submit"] {
       width: 100%;
       padding: 12px;
@@ -121,6 +161,76 @@
     button[type="submit"]:hover { background: #0077ed; }
     button[type="submit"]:disabled { background: #a0c4f1; cursor: not-allowed; }
 
+    /* Delete button */
+    #deleteBtn {
+      display: none;
+      width: 100%;
+      padding: 12px;
+      background: #f44336;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    #deleteBtn:hover { background: #d32f2f; }
+    #deleteBtn:disabled { background: #ef9a9a; cursor: not-allowed; }
+
+    /* Delete confirmation box */
+    .confirm-box {
+      background: #fff8e1;
+      border: 1px solid #ffcc02;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+    }
+
+    .confirm-box p {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #5a4000;
+      margin-bottom: 12px;
+    }
+
+    .confirm-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-cancel {
+      flex: 1;
+      padding: 10px;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: background 0.15s;
+    }
+
+    .btn-cancel:hover { background: #eee; }
+
+    .btn-danger {
+      flex: 1;
+      padding: 10px;
+      background: #f44336;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: background 0.15s;
+    }
+
+    .btn-danger:hover { background: #d32f2f; }
+    .btn-danger:disabled { background: #ef9a9a; cursor: not-allowed; }
+
+    /* Log panel */
     #log {
       display: none;
       background: #1e1e1e;
@@ -135,9 +245,9 @@
     }
 
     .log-line { margin-bottom: 4px; }
-    .log-line.info::before  { content: "› "; color: #888; }
+    .log-line.info::before    { content: "› "; color: #888; }
     .log-line.success::before { content: "✓ "; color: #4caf50; }
-    .log-line.error::before { content: "✗ "; color: #f44336; }
+    .log-line.error::before   { content: "✗ "; color: #f44336; }
     .log-line.success { color: #a5d6a7; }
     .log-line.error   { color: #ef9a9a; }
   </style>
@@ -151,6 +261,7 @@
         <div class="mode-toggle">
           <button type="button" id="modeCreate" class="active">신규 생성 (Create)</button>
           <button type="button" id="modeUpdate">업데이트 (Update)</button>
+          <button type="button" id="modeDelete">삭제 (Delete)</button>
         </div>
 
         <div class="row">
@@ -164,6 +275,7 @@
           </div>
         </div>
 
+        <!-- CREATE FIELDS -->
         <div id="createFields">
           <label for="storeId">스토어 ID (Store ID)</label>
           <input type="text" id="storeId" name="storeId" placeholder="your-store-id" autocomplete="off" />
@@ -176,20 +288,67 @@
 
           <label for="settingsPropertyCreate">Settings &amp; Property</label>
           <textarea id="settingsPropertyCreate" name="settingsProperty" placeholder='{"settings":[...],"property":{...}}'></textarea>
+
+          <!-- TODO: Libraries field pending API support for POST/PUT (currently ignored by server) -->
+          <label for="librariesCreate">Libraries</label>
+          <textarea id="librariesCreate" name="libraries" placeholder="&lt;script src=&quot;...&quot;&gt;&lt;/script&gt;,&lt;link .../&gt;"></textarea>
         </div>
 
+        <!-- UPDATE FIELDS -->
         <div id="updateFields" style="display:none">
           <label for="blockId">블록 ID (Block ID)</label>
           <input type="text" id="blockId" name="blockId" placeholder="block-id" />
 
-          <label for="blockCodeUpdate">블록 코드 (Block Code)</label>
+          <div class="field-header">
+            <label for="blockTitleUpdate">블록 이름 변경 (Block Name)</label>
+            <label class="preserve-label">
+              <input type="checkbox" id="preserveTitle" name="preserveTitle" checked />기존값 유지
+            </label>
+          </div>
+          <input type="text" id="blockTitleUpdate" name="blockTitle" placeholder="새 블록 이름 (비우면 변경 안 함)" />
+
+          <div class="field-header">
+            <label for="blockCodeUpdate">블록 코드 (Block Code)</label>
+            <label class="preserve-label">
+              <input type="checkbox" id="preserveCode" name="preserveCode" checked />기존값 유지
+            </label>
+          </div>
           <textarea id="blockCodeUpdate" name="blockCode" placeholder="<!-- paste your code here -->"></textarea>
 
-          <label for="settingsPropertyUpdate">Settings &amp; Property</label>
+          <div class="field-header">
+            <label for="settingsPropertyUpdate">Settings &amp; Property</label>
+            <label class="preserve-label">
+              <input type="checkbox" id="preserveSettings" name="preserveSettings" checked />기존값 유지
+            </label>
+          </div>
           <textarea id="settingsPropertyUpdate" name="settingsProperty" placeholder='{"settings":[...],"property":{...}}'></textarea>
+
+          <!-- TODO: Libraries field pending API support for POST/PUT (currently ignored by server) -->
+          <div class="field-header">
+            <label for="librariesUpdate">Libraries</label>
+            <label class="preserve-label">
+              <input type="checkbox" id="preserveLibraries" name="preserveLibraries" checked />기존값 유지
+            </label>
+          </div>
+          <textarea id="librariesUpdate" name="libraries" placeholder="&lt;script src=&quot;...&quot;&gt;&lt;/script&gt;,&lt;link .../&gt;"></textarea>
+        </div>
+
+        <!-- DELETE FIELDS -->
+        <div id="deleteFields" style="display:none">
+          <label for="blockIdDelete">블록 ID (Block ID)</label>
+          <input type="text" id="blockIdDelete" name="deleteBlockId" placeholder="block-id" />
+
+          <div id="deleteConfirmBox" class="confirm-box" style="display:none">
+            <p>이 블록을 정말 삭제하시겠습니까?</p>
+            <div class="confirm-actions">
+              <button type="button" id="cancelDeleteBtn" class="btn-cancel">취소</button>
+              <button type="button" id="confirmDeleteBtn" class="btn-danger">삭제 확인</button>
+            </div>
+          </div>
         </div>
 
         <button type="submit" id="submitBtn">블록 생성 시작</button>
+        <button type="button" id="deleteBtn">블록 삭제</button>
       </form>
     </div>
 
@@ -197,30 +356,76 @@
   </div>
 
   <script>
-    const form         = document.getElementById("form");
-    const log          = document.getElementById("log");
-    const btn          = document.getElementById("submitBtn");
-    const createFields = document.getElementById("createFields");
-    const updateFields = document.getElementById("updateFields");
-    const modeCreate   = document.getElementById("modeCreate");
-    const modeUpdate   = document.getElementById("modeUpdate");
+    const form             = document.getElementById("form");
+    const log              = document.getElementById("log");
+    const submitBtn        = document.getElementById("submitBtn");
+    const deleteBtn        = document.getElementById("deleteBtn");
+    const createFields     = document.getElementById("createFields");
+    const updateFields     = document.getElementById("updateFields");
+    const deleteFields     = document.getElementById("deleteFields");
+    const modeCreate       = document.getElementById("modeCreate");
+    const modeUpdate       = document.getElementById("modeUpdate");
+    const modeDelete       = document.getElementById("modeDelete");
+    const deleteConfirmBox = document.getElementById("deleteConfirmBox");
 
-    let isUpdateMode = false;
+    let currentMode = "create";
 
-    function setMode(update) {
-      isUpdateMode = update;
-      modeCreate.classList.toggle("active", !update);
-      modeUpdate.classList.toggle("active", update);
-      createFields.style.display = update ? "none" : "block";
-      updateFields.style.display = update ? "block" : "none";
-      createFields.querySelectorAll("input, textarea").forEach(el => el.disabled = update);
-      updateFields.querySelectorAll("input, textarea").forEach(el => el.disabled = !update);
-      btn.textContent = update ? "블록 업데이트 시작" : "블록 생성 시작";
+    function applyPreserveState() {
+      document.getElementById("blockTitleUpdate").disabled   = document.getElementById("preserveTitle").checked;
+      document.getElementById("blockCodeUpdate").disabled    = document.getElementById("preserveCode").checked;
+      document.getElementById("settingsPropertyUpdate").disabled = document.getElementById("preserveSettings").checked;
+      document.getElementById("librariesUpdate").disabled    = document.getElementById("preserveLibraries").checked;
     }
 
-    modeCreate.addEventListener("click", () => setMode(false));
-    modeUpdate.addEventListener("click", () => setMode(true));
-    setMode(false);
+    function updateSubmitState() {
+      const allPreserved = ["preserveTitle", "preserveCode", "preserveSettings", "preserveLibraries"]
+        .every(id => document.getElementById(id).checked);
+      if (currentMode === "update") submitBtn.disabled = allPreserved;
+    }
+
+    ["preserveTitle", "preserveCode", "preserveSettings", "preserveLibraries"].forEach(id => {
+      document.getElementById(id).addEventListener("change", () => {
+        applyPreserveState();
+        updateSubmitState();
+      });
+    });
+
+    function setMode(mode) {
+      currentMode = mode;
+
+      modeCreate.classList.toggle("active", mode === "create");
+      modeUpdate.classList.toggle("active", mode === "update");
+      modeDelete.classList.toggle("active", mode === "delete");
+
+      createFields.style.display = mode === "create" ? "block" : "none";
+      updateFields.style.display = mode === "update" ? "block" : "none";
+      deleteFields.style.display = mode === "delete" ? "block" : "none";
+
+      createFields.querySelectorAll("input, textarea").forEach(el => el.disabled = mode !== "create");
+      deleteFields.querySelectorAll("input").forEach(el => el.disabled = mode !== "delete");
+
+      if (mode === "update") {
+        updateFields.querySelectorAll("input, textarea").forEach(el => el.disabled = false);
+        applyPreserveState();
+        updateSubmitState();
+      } else {
+        updateFields.querySelectorAll("input, textarea").forEach(el => el.disabled = true);
+      }
+
+      submitBtn.style.display = mode !== "delete" ? "block" : "none";
+      deleteBtn.style.display = mode === "delete" ? "block" : "none";
+
+      if (mode === "create") submitBtn.textContent = "블록 생성 시작";
+      else if (mode === "update") submitBtn.textContent = "블록 업데이트 시작";
+
+      deleteConfirmBox.style.display = "none";
+      deleteBtn.disabled = false;
+    }
+
+    modeCreate.addEventListener("click", () => setMode("create"));
+    modeUpdate.addEventListener("click", () => setMode("update"));
+    modeDelete.addEventListener("click", () => setMode("delete"));
+    setMode("create");
 
     function appendLog(text, status) {
       const line = document.createElement("div");
@@ -230,31 +435,9 @@
       log.scrollTop = log.scrollHeight;
     }
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-
-      // Ensure hidden mode fields don't bleed into submission
-      if (isUpdateMode) {
-        document.getElementById("storeId").value = "";
-        document.getElementById("blockName").value = "";
-        document.getElementById("blockCodeCreate").value = "";
-        document.getElementById("settingsPropertyCreate").value = "";
-      } else {
-        document.getElementById("blockId").value = "";
-        document.getElementById("blockCodeUpdate").value = "";
-        document.getElementById("settingsPropertyUpdate").value = "";
-      }
-
-      log.innerHTML = "";
-      log.style.display = "block";
-      btn.disabled = true;
-      btn.textContent = "실행 중...";
-
-      const data = new FormData(form);
-
-      const response = await fetch("/run", { method: "POST", body: data });
-      const reader   = response.body.getReader();
-      const decoder  = new TextDecoder();
+    async function streamSSE(response, onDone) {
+      const reader  = response.body.getReader();
+      const decoder = new TextDecoder();
       let buffer = "";
 
       while (true) {
@@ -271,9 +454,66 @@
           } catch (_) {}
         }
       }
+      if (onDone) onDone();
+    }
 
-      btn.disabled = false;
-      btn.textContent = isUpdateMode ? "블록 업데이트 시작" : "블록 생성 시작";
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      // Clear inactive mode fields so they don't bleed into FormData
+      if (currentMode === "create") {
+        document.getElementById("blockId").value = "";
+        document.getElementById("blockTitleUpdate").value = "";
+        document.getElementById("blockCodeUpdate").value = "";
+        document.getElementById("settingsPropertyUpdate").value = "";
+        document.getElementById("librariesUpdate").value = "";
+      } else if (currentMode === "update") {
+        document.getElementById("storeId").value = "";
+        document.getElementById("blockName").value = "";
+        document.getElementById("blockCodeCreate").value = "";
+        document.getElementById("settingsPropertyCreate").value = "";
+        document.getElementById("librariesCreate").value = "";
+      }
+
+      log.innerHTML = "";
+      log.style.display = "block";
+      submitBtn.disabled = true;
+      submitBtn.textContent = "실행 중...";
+
+      const data = new FormData(form);
+      const response = await fetch("/run", { method: "POST", body: data });
+      await streamSSE(response, () => {
+        submitBtn.disabled = false;
+        submitBtn.textContent = currentMode === "update" ? "블록 업데이트 시작" : "블록 생성 시작";
+      });
+    });
+
+    // Delete flow
+    deleteBtn.addEventListener("click", () => {
+      deleteConfirmBox.style.display = "block";
+      deleteBtn.disabled = true;
+    });
+
+    document.getElementById("cancelDeleteBtn").addEventListener("click", () => {
+      deleteConfirmBox.style.display = "none";
+      deleteBtn.disabled = false;
+    });
+
+    document.getElementById("confirmDeleteBtn").addEventListener("click", async () => {
+      deleteConfirmBox.style.display = "none";
+      log.innerHTML = "";
+      log.style.display = "block";
+
+      const confirmBtn = document.getElementById("confirmDeleteBtn");
+      deleteBtn.disabled = true;
+      confirmBtn.disabled = true;
+
+      const data = new FormData(form);
+      const response = await fetch("/delete", { method: "POST", body: data });
+      await streamSSE(response, () => {
+        deleteBtn.disabled = false;
+        confirmBtn.disabled = false;
+      });
     });
   </script>
 </body>
