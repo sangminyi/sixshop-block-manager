@@ -475,7 +475,7 @@
       log.scrollTop = log.scrollHeight;
     }
 
-    async function streamSSE(response, onDone) {
+    async function streamSSE(response, onDone, onLine) {
       const reader  = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -491,10 +491,41 @@
           try {
             const { text, status } = JSON.parse(line.slice(5).trim());
             appendLog(text, status);
+            if (onLine) onLine(text, status);
           } catch (_) {}
         }
       }
       if (onDone) onDone();
+    }
+
+    function downloadLog(lines, blockName, storeCount) {
+      const now = new Date();
+      const pad = n => String(n).padStart(2, "0");
+      const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      const fileStamp = dateStr.replace(" ", "_").replaceAll(":", "-");
+
+      const header = [
+        "Sixshop Block Manager — Create Log",
+        `Generated : ${dateStr}`,
+        `Block Name: ${blockName}`,
+        `Store IDs : ${storeCount}`,
+        "═".repeat(48),
+      ].join("\n");
+
+      const body = lines.map(({ text, status }) => {
+        const prefix = status === "success" ? "✓" : status === "error" ? "✗" : "›";
+        return `${prefix} ${text}`;
+      }).join("\n");
+
+      const blob = new Blob([header + "\n" + body + "\n"], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `block-create-${fileStamp}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     form.addEventListener("submit", async (e) => {
@@ -522,12 +553,22 @@
       submitBtn.textContent = "실행 중...";
 
       const data = new FormData(form);
+      const isCreate = currentMode === "create";
+      const logLines = [];
+      const blockNameVal = document.getElementById("blockName").value.trim();
+      const storeCountVal = storeIdsEl.value.split("\n").map(s => s.trim()).filter(Boolean).length;
+
       const response = await fetch("/run", { method: "POST", body: data });
-      await streamSSE(response, () => {
-        submitBtn.disabled = false;
-        if (currentMode === "update") submitBtn.textContent = "블록 업데이트 시작";
-        else updateStoreCount();
-      });
+      await streamSSE(
+        response,
+        () => {
+          submitBtn.disabled = false;
+          if (currentMode === "update") submitBtn.textContent = "블록 업데이트 시작";
+          else updateStoreCount();
+          if (isCreate) downloadLog(logLines, blockNameVal, storeCountVal);
+        },
+        isCreate ? (text, status) => logLines.push({ text, status }) : null,
+      );
     });
 
     // Delete flow
