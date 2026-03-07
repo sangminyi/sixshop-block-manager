@@ -296,6 +296,9 @@
 
         <!-- UPDATE FIELDS -->
         <div id="updateFields" style="display:none">
+          <label for="storeIdUpdate">스토어 ID (Store ID)</label>
+          <input type="text" id="storeIdUpdate" name="storeId" placeholder="your-store-id" autocomplete="off" />
+
           <label for="blockId">블록 ID (Block ID)</label>
           <input type="text" id="blockId" name="blockId" placeholder="block-id" />
 
@@ -335,6 +338,9 @@
 
         <!-- DELETE FIELDS -->
         <div id="deleteFields" style="display:none">
+          <label for="storeIdDelete">스토어 ID (Store ID)</label>
+          <input type="text" id="storeIdDelete" name="storeId" placeholder="your-store-id" autocomplete="off" />
+
           <label for="blockIdDelete">블록 ID (Block ID)</label>
           <input type="text" id="blockIdDelete" name="deleteBlockId" placeholder="block-id" />
 
@@ -378,9 +384,13 @@
     }
 
     function updateSubmitState() {
-      const allPreserved = ["preserveTitle", "preserveCode", "preserveSettings", "preserveLibraries"]
-        .every(id => document.getElementById(id).checked);
-      if (currentMode === "update") submitBtn.disabled = allPreserved;
+      if (currentMode === "update") {
+        const allPreserved = ["preserveTitle", "preserveCode", "preserveSettings", "preserveLibraries"]
+          .every(id => document.getElementById(id).checked);
+        submitBtn.disabled = allPreserved;
+      } else {
+        submitBtn.disabled = false;
+      }
     }
 
     ["preserveTitle", "preserveCode", "preserveSettings", "preserveLibraries"].forEach(id => {
@@ -407,13 +417,13 @@
       if (mode === "update") {
         updateFields.querySelectorAll("input, textarea").forEach(el => el.disabled = false);
         applyPreserveState();
-        updateSubmitState();
       } else {
         updateFields.querySelectorAll("input, textarea").forEach(el => el.disabled = true);
       }
 
       submitBtn.style.display = mode !== "delete" ? "block" : "none";
       deleteBtn.style.display = mode === "delete" ? "block" : "none";
+      updateSubmitState();
 
       if (mode === "create") submitBtn.textContent = "블록 생성 시작";
       else if (mode === "update") submitBtn.textContent = "블록 업데이트 시작";
@@ -462,6 +472,7 @@
 
       // Clear inactive mode fields so they don't bleed into FormData
       if (currentMode === "create") {
+        document.getElementById("storeIdUpdate").value = "";
         document.getElementById("blockId").value = "";
         document.getElementById("blockTitleUpdate").value = "";
         document.getElementById("blockCodeUpdate").value = "";
