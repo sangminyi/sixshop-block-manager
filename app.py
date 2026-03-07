@@ -222,7 +222,7 @@ def run():
     store_id = request.form.get("storeId", "").strip()
     block_id = request.form.get("blockId", "").strip()
     block_name = request.form.get("blockName", "").strip()
-    block_code = request.form.get("blockCode", "")
+    block_code = request.form.get("blockCode", "").replace("\r\n", "\n").replace("\r", "\n")
 
     try:
         sp = json.loads(request.form.get("settingsProperty", "") or "{}")
