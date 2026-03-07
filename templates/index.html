@@ -730,7 +730,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const fileMode = mode === "create" ? "create_manual" : mode === "create_from_blocks" ? "create_fromblock" : mode;
+      const fileMode = mode === "create" ? "create_manual" : mode === "create_from_blocks" ? "create_from_blocks" : mode;
       a.download = `block-${fileMode}-${fileStamp}.txt`;
       document.body.appendChild(a);
       a.click();
