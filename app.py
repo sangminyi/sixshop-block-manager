@@ -49,6 +49,9 @@ def login_and_get_token(page, email, password, store_id):
     if not initial_token:
         return None, "no_token_in_localstorage"
 
+    if not store_id:
+        return initial_token, None
+
     # Detect current store from the landing URL
     current_store = page.url.rstrip("/").split("/")[-1]
 
@@ -116,34 +119,30 @@ def run_automation(email, password, store_id, block_name, block_code, block_id=N
         page = context.new_page()
 
         try:
-            # Step 1: Login
-            yield msg(f"Logging in and switching to store '{store_id}'...")
-            try:
-                bearer_token, err = login_and_get_token(page, email, password, store_id)
-            except PlaywrightTimeoutError:
-                yield msg("Login failed or timed out.", "error")
-                return
-
-            if not bearer_token:
-                yield msg(f"Could not get auth token: {err}", "error")
-                return
-
-            yield msg(f"Logged in. Active store: {store_id}", "success")
-
             if block_id:
-                # UPDATE mode: call the API directly
+                # UPDATE mode: no store switching needed — login to default store
+                yield msg("Logging in...")
+                try:
+                    bearer_token, err = login_and_get_token(page, email, password, store_id="")
+                except PlaywrightTimeoutError:
+                    yield msg("Login failed or timed out.", "error")
+                    return
+                if not bearer_token:
+                    yield msg(f"Could not get auth token: {err}", "error")
+                    return
+                yield msg("Logged in.", "success")
                 browser.close()
-                yield msg(f"Updating block via API (ID: {block_id})...")
 
+                yield msg(f"Updating block (ID: {block_id})...")
                 api_url = f"https://storefront-blockmaker-service.sixshop.io/v1/block-components/{block_id}"
+                store_from_token = decode_jwt(bearer_token).get("storeName", "")
                 headers = {
                     "Authorization": f"Bearer {bearer_token}",
-                    "storeid": store_id,
+                    "storeid": store_from_token,
                     "bff-access-key": BFF_ACCESS_KEY,
                     "Content-Type": "application/json",
                 }
-                payload = {"content": block_code, "property": {}, "settings": []}
-                resp = http.put(api_url, headers=headers, json=payload, timeout=15)
+                resp = http.put(api_url, headers=headers, json={"content": block_code, "property": {}, "settings": []}, timeout=15)
 
                 if resp.status_code == 200:
                     block_url = f"https://store.sixshop.com/editor/block-maker/?id={block_id}"
@@ -154,7 +153,18 @@ def run_automation(email, password, store_id, block_name, block_code, block_id=N
                 return
 
             else:
-                # CREATE mode: use browser automation
+                # CREATE mode: login with store switching, then browser automation
+                yield msg(f"Logging in and switching to store '{store_id}'...")
+                try:
+                    bearer_token, err = login_and_get_token(page, email, password, store_id)
+                except PlaywrightTimeoutError:
+                    yield msg("Login failed or timed out.", "error")
+                    return
+                if not bearer_token:
+                    yield msg(f"Could not get auth token: {err}", "error")
+                    return
+                yield msg(f"Logged in. Active store: {store_id}", "success")
+
                 yield msg("Navigating to block-maker...")
                 page.goto("https://store.sixshop.com/editor/block-maker", wait_until="networkidle")
 
@@ -189,7 +199,6 @@ def run_automation(email, password, store_id, block_name, block_code, block_id=N
                 page.wait_for_load_state("networkidle")
                 browser.close()
 
-                # Insert code via API now that we have the new block ID
                 yield msg("Saving block code via API...")
                 api_url = f"https://storefront-blockmaker-service.sixshop.io/v1/block-components/{new_block_id}"
                 headers = {
@@ -198,8 +207,7 @@ def run_automation(email, password, store_id, block_name, block_code, block_id=N
                     "bff-access-key": BFF_ACCESS_KEY,
                     "Content-Type": "application/json",
                 }
-                payload = {"content": block_code, "property": {}, "settings": []}
-                resp = http.put(api_url, headers=headers, json=payload, timeout=15)
+                resp = http.put(api_url, headers=headers, json={"content": block_code, "property": {}, "settings": []}, timeout=15)
 
                 if resp.status_code == 200:
                     yield msg("Block saved successfully!", "success")
@@ -237,17 +245,21 @@ def run():
     block_name = request.form.get("blockName", "").strip()
     block_code = request.form.get("blockCode", "")
 
-    if not all([email, password, store_id, block_code]):
+    if not all([email, password, block_code]):
         automation_lock.release()
         return Response(
-            'data: {"text": "Email, password, store ID, and block code are required.", "status": "error"}\n\n',
+            'data: {"text": "Email, password, and block code are required.", "status": "error"}\n\n',
             mimetype="text/event-stream",
         )
 
-    if not block_id and not block_name:
+    if block_id:
+        pass  # UPDATE mode: block_id is sufficient
+    elif store_id and block_name:
+        pass  # CREATE mode: both store_id and block_name required
+    else:
         automation_lock.release()
         return Response(
-            'data: {"text": "Provide either a Block ID (to update) or a Block Name (to create).", "status": "error"}\n\n',
+            'data: {"text": "Create mode requires Store ID and Block Name.", "status": "error"}\n\n',
             mimetype="text/event-stream",
         )
 
