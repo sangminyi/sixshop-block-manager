@@ -107,6 +107,35 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.12);
     }
 
+    /* Sub-mode toggle (inside Create tab) */
+    .sub-toggle {
+      display: flex;
+      background: #f7f7f9;
+      border-radius: 8px;
+      padding: 3px;
+      margin-bottom: 20px;
+      border: 1px solid #e8e8ed;
+    }
+
+    .sub-toggle button {
+      flex: 1;
+      padding: 6px 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      color: #888;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .sub-toggle button.active {
+      background: #fff;
+      color: #0071e3;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.10);
+    }
+
     /* Field header with preserve checkbox or counter */
     .field-header {
       display: flex;
@@ -290,24 +319,49 @@
 
         <!-- CREATE FIELDS -->
         <div id="createFields">
+          <div class="sub-toggle">
+            <button type="button" id="subModeFromBlock" class="active">블록에서 가져오기</button>
+            <button type="button" id="subModeManual">수동 입력</button>
+          </div>
+
+          <!-- FROM BLOCK fields -->
+          <div id="createFromBlockFields">
+            <div class="row">
+              <div>
+                <label>소스 스토어 ID (Source Store IDs)</label>
+                <textarea id="srcStoreIds" name="srcStoreIds" class="store-ids" placeholder="sangmin&#10;store2"></textarea>
+              </div>
+              <div>
+                <label>소스 블록 ID (Source Block IDs)</label>
+                <textarea id="srcBlockIds" name="srcBlockIds" class="store-ids" placeholder="69ac30ec&#10;69ac30ed"></textarea>
+              </div>
+            </div>
+            <div class="pair-counter-row">
+              <span id="srcPairCount" class="store-count">0 / 20 pairs</span>
+            </div>
+          </div>
+
+          <!-- MANUAL fields -->
+          <div id="createManualFields" style="display:none">
+            <label for="blockName">블록 이름 (Block Name)</label>
+            <input type="text" id="blockName" name="blockName" placeholder="my-block" />
+
+            <label for="blockCodeCreate">블록 코드 (Block Code)</label>
+            <textarea id="blockCodeCreate" name="blockCode" placeholder="<!-- paste your code here -->"></textarea>
+
+            <label for="settingsPropertyCreate">Settings &amp; Property</label>
+            <textarea id="settingsPropertyCreate" name="settingsProperty" placeholder='{"settings":[...],"property":{...}}'></textarea>
+
+            <label for="librariesCreate">Libraries</label>
+            <textarea id="librariesCreate" name="libraries" placeholder="&lt;script src=&quot;...&quot;&gt;&lt;/script&gt;,&lt;link .../&gt;"></textarea>
+          </div>
+
+          <!-- Target Store IDs (always visible) -->
           <div class="field-header">
-            <label for="storeIds">스토어 ID (Store IDs)</label>
+            <label for="storeIds">타겟 스토어 ID (Target Store IDs)</label>
             <span id="storeCount" class="store-count">0 / 100</span>
           </div>
           <textarea id="storeIds" name="storeIds" class="store-ids" placeholder="sangmin&#10;store2&#10;agent"></textarea>
-
-          <label for="blockName">블록 이름 (Block Name)</label>
-          <input type="text" id="blockName" name="blockName" placeholder="my-block" />
-
-          <label for="blockCodeCreate">블록 코드 (Block Code)</label>
-          <textarea id="blockCodeCreate" name="blockCode" placeholder="<!-- paste your code here -->"></textarea>
-
-          <label for="settingsPropertyCreate">Settings &amp; Property</label>
-          <textarea id="settingsPropertyCreate" name="settingsProperty" placeholder='{"settings":[...],"property":{...}}'></textarea>
-
-          <!-- TODO: Libraries field pending API support for POST/PUT (currently ignored by server) -->
-          <label for="librariesCreate">Libraries</label>
-          <textarea id="librariesCreate" name="libraries" placeholder="&lt;script src=&quot;...&quot;&gt;&lt;/script&gt;,&lt;link .../&gt;"></textarea>
         </div>
 
         <!-- UPDATE FIELDS -->
@@ -417,33 +471,37 @@
       const count = ids.length;
       storeCountEl.textContent = `${count} / 100`;
       storeCountEl.classList.toggle("over", count > 100);
-      submitBtn.textContent = count > 0
-        ? `블록 생성 시작 (${Math.min(count, 100)}개 스토어)`
-        : "블록 생성 시작";
+      if (currentMode === "create_from_blocks") {
+        updateSubmitState();
+      } else if (currentMode === "create") {
+        submitBtn.textContent = count > 0
+          ? `블록 생성 시작 (${Math.min(count, 100)}개 스토어)`
+          : "블록 생성 시작";
+      }
     }
 
     storeIdsEl.addEventListener("input", updateStoreCount);
 
     // ── Pair helpers ────────────────────────────────────────────
-    function parsePairs(storeEl, blockEl) {
+    function parsePairs(storeEl, blockEl, limit = 100) {
       const storeIds = storeEl.value.split("\n").map(s => s.trim()).filter(Boolean);
       const blockIds = blockEl.value.split("\n").map(s => s.trim()).filter(Boolean);
       const count = storeIds.length;
       const mismatch = storeIds.length !== blockIds.length;
-      const over = count > 100;
+      const over = count > limit;
       const valid = count > 0 && !mismatch && !over;
       return { storeIds, blockIds, count, mismatch, over, valid };
     }
 
-    function renderPairCount(el, storeIds, blockIds, count, mismatch, over) {
+    function renderPairCount(el, storeIds, blockIds, count, mismatch, over, limit = 100) {
       if (count === 0 && blockIds.length === 0) {
-        el.textContent = "0 / 100 pairs";
+        el.textContent = `0 / ${limit} pairs`;
         el.classList.remove("over");
       } else if (mismatch) {
         el.textContent = `불일치 (스토어 ${storeIds.length} / 블록 ${blockIds.length})`;
         el.classList.add("over");
       } else {
-        el.textContent = `${count} / 100 pairs`;
+        el.textContent = `${count} / ${limit} pairs`;
         el.classList.toggle("over", over);
       }
     }
@@ -451,8 +509,8 @@
     // ── Update pair counter ─────────────────────────────────────
     function updateUpdatePairCount() {
       const { storeIds, blockIds, count, mismatch, over, valid } =
-        parsePairs(document.getElementById("storeIdsUpdate"), document.getElementById("blockIdsUpdate"));
-      renderPairCount(document.getElementById("updatePairCount"), storeIds, blockIds, count, mismatch, over);
+        parsePairs(document.getElementById("storeIdsUpdate"), document.getElementById("blockIdsUpdate"), 100);
+      renderPairCount(document.getElementById("updatePairCount"), storeIds, blockIds, count, mismatch, over, 100);
       if (currentMode === "update") {
         submitBtn.textContent = valid ? `블록 업데이트 시작 (${count}개)` : "블록 업데이트 시작";
         updateSubmitState();
@@ -466,8 +524,8 @@
     // ── Delete pair counter ─────────────────────────────────────
     function updateDeletePairCount() {
       const { storeIds, blockIds, count, mismatch, over, valid } =
-        parsePairs(document.getElementById("storeIdsDelete"), document.getElementById("blockIdsDelete"));
-      renderPairCount(document.getElementById("deletePairCount"), storeIds, blockIds, count, mismatch, over);
+        parsePairs(document.getElementById("storeIdsDelete"), document.getElementById("blockIdsDelete"), 100);
+      renderPairCount(document.getElementById("deletePairCount"), storeIds, blockIds, count, mismatch, over, 100);
       deleteBtn.disabled = !valid;
       if (valid) {
         document.getElementById("deleteConfirmMsg").textContent =
@@ -478,6 +536,49 @@
     ["storeIdsDelete", "blockIdsDelete"].forEach(id => {
       document.getElementById(id).addEventListener("input", updateDeletePairCount);
     });
+
+    // ── Create sub-mode ─────────────────────────────────────────
+    let createSubMode = "fromBlock";
+
+    function updateSrcPairCount() {
+      const { storeIds, blockIds, count, mismatch, over, valid } =
+        parsePairs(document.getElementById("srcStoreIds"), document.getElementById("srcBlockIds"), 20);
+      renderPairCount(document.getElementById("srcPairCount"), storeIds, blockIds, count, mismatch, over, 20);
+      if (currentMode === "create_from_blocks") updateSubmitState();
+    }
+
+    ["srcStoreIds", "srcBlockIds"].forEach(id => {
+      document.getElementById(id).addEventListener("input", updateSrcPairCount);
+    });
+
+    function setCreateSubMode(subMode) {
+      createSubMode = subMode;
+      currentMode = subMode === "fromBlock" ? "create_from_blocks" : "create";
+      modeInput.value = currentMode;
+
+      document.getElementById("subModeFromBlock").classList.toggle("active", subMode === "fromBlock");
+      document.getElementById("subModeManual").classList.toggle("active", subMode === "manual");
+
+      const fromBlockDiv = document.getElementById("createFromBlockFields");
+      const manualDiv    = document.getElementById("createManualFields");
+
+      fromBlockDiv.style.display = subMode === "fromBlock" ? "block" : "none";
+      manualDiv.style.display    = subMode === "manual"    ? "block" : "none";
+
+      fromBlockDiv.querySelectorAll("input, textarea").forEach(el => el.disabled = subMode !== "fromBlock");
+      manualDiv.querySelectorAll("input, textarea").forEach(el => el.disabled = subMode !== "manual");
+      storeIdsEl.disabled = false;
+
+      if (subMode === "fromBlock") {
+        updateSrcPairCount();
+      } else {
+        updateStoreCount();
+      }
+      updateSubmitState();
+    }
+
+    document.getElementById("subModeFromBlock").addEventListener("click", () => setCreateSubMode("fromBlock"));
+    document.getElementById("subModeManual").addEventListener("click", () => setCreateSubMode("manual"));
 
     // ── Preserve checkboxes ─────────────────────────────────────
     function applyPreserveState() {
@@ -494,8 +595,24 @@
         const { valid } = parsePairs(
           document.getElementById("storeIdsUpdate"),
           document.getElementById("blockIdsUpdate"),
+          100,
         );
         submitBtn.disabled = allPreserved || !valid;
+      } else if (currentMode === "create_from_blocks") {
+        const { valid: srcValid, count: srcCount } = parsePairs(
+          document.getElementById("srcStoreIds"),
+          document.getElementById("srcBlockIds"),
+          20,
+        );
+        const tgtIds = storeIdsEl.value.split("\n").map(s => s.trim()).filter(Boolean);
+        const tgtCount = tgtIds.length;
+        const tgtValid = tgtCount > 0 && tgtCount <= 100;
+        submitBtn.disabled = !srcValid || !tgtValid;
+        if (srcValid && tgtValid) {
+          submitBtn.textContent = `블록 복사 시작 (${srcCount}소스 × ${tgtCount}타겟)`;
+        } else {
+          submitBtn.textContent = "블록 복사 시작";
+        }
       } else {
         submitBtn.disabled = false;
       }
@@ -510,18 +627,22 @@
 
     // ── setMode ─────────────────────────────────────────────────
     function setMode(mode) {
+      const isCreate = mode === "create" || mode === "create_from_blocks";
       currentMode = mode;
-      modeInput.value = mode;
+      if (!isCreate) modeInput.value = mode;
 
-      modeCreate.classList.toggle("active", mode === "create");
+      modeCreate.classList.toggle("active", isCreate);
       modeUpdate.classList.toggle("active", mode === "update");
       modeDelete.classList.toggle("active", mode === "delete");
 
-      createFields.style.display = mode === "create" ? "block" : "none";
+      createFields.style.display = isCreate ? "block" : "none";
       updateFields.style.display = mode === "update" ? "block" : "none";
       deleteFields.style.display = mode === "delete" ? "block" : "none";
 
-      createFields.querySelectorAll("input, textarea").forEach(el => el.disabled = mode !== "create");
+      // When leaving create, disable all create inputs
+      if (!isCreate) {
+        createFields.querySelectorAll("input, textarea").forEach(el => el.disabled = true);
+      }
       deleteFields.querySelectorAll("input, textarea").forEach(el => el.disabled = mode !== "delete");
 
       if (mode === "update") {
@@ -537,16 +658,22 @@
       deleteConfirmBox.style.display = "none";
       deleteBtn.disabled = false;
 
-      if (mode === "create") updateStoreCount();
-      else if (mode === "delete") updateDeletePairCount();
+      if (isCreate) {
+        // Always re-apply sub-mode when entering create
+        setCreateSubMode(createSubMode);
+        updateStoreCount();
+        updateSrcPairCount();
+      } else if (mode === "delete") {
+        updateDeletePairCount();
+      }
 
       updateSubmitState();
     }
 
-    modeCreate.addEventListener("click", () => setMode("create"));
+    modeCreate.addEventListener("click", () => setMode(createSubMode === "manual" ? "create" : "create_from_blocks"));
     modeUpdate.addEventListener("click", () => setMode("update"));
     modeDelete.addEventListener("click", () => setMode("delete"));
-    setMode("create");
+    setMode("create_from_blocks");
 
     // ── Log helpers ─────────────────────────────────────────────
     function appendLog(text, status) {
@@ -586,7 +713,7 @@
       const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
       const fileStamp = dateStr.replace(" ", "_").replaceAll(":", "-");
 
-      const modeLabel = { create: "Create", update: "Update", delete: "Delete" }[mode] || mode;
+      const modeLabel = { create: "Create (Manual)", create_from_blocks: "Create (From Block)", update: "Update", delete: "Delete" }[mode] || mode;
       const headerLines = [
         `Sixshop Block Manager — ${modeLabel} Log`,
         `Generated : ${dateStr}`,
@@ -603,7 +730,8 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `block-${mode}-${fileStamp}.txt`;
+      const fileMode = mode === "create" ? "create_manual" : mode === "create_from_blocks" ? "create_from_blocks" : mode;
+      a.download = `block-${fileMode}-${fileStamp}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -616,6 +744,19 @@
 
       // Clear inactive fields so they don't bleed into FormData
       if (currentMode === "create") {
+        document.getElementById("srcStoreIds").value = "";
+        document.getElementById("srcBlockIds").value = "";
+        document.getElementById("storeIdsUpdate").value = "";
+        document.getElementById("blockIdsUpdate").value = "";
+        document.getElementById("blockTitleUpdate").value = "";
+        document.getElementById("blockCodeUpdate").value = "";
+        document.getElementById("settingsPropertyUpdate").value = "";
+        document.getElementById("librariesUpdate").value = "";
+      } else if (currentMode === "create_from_blocks") {
+        document.getElementById("blockName").value = "";
+        document.getElementById("blockCodeCreate").value = "";
+        document.getElementById("settingsPropertyCreate").value = "";
+        document.getElementById("librariesCreate").value = "";
         document.getElementById("storeIdsUpdate").value = "";
         document.getElementById("blockIdsUpdate").value = "";
         document.getElementById("blockTitleUpdate").value = "";
@@ -623,6 +764,8 @@
         document.getElementById("settingsPropertyUpdate").value = "";
         document.getElementById("librariesUpdate").value = "";
       } else if (currentMode === "update") {
+        document.getElementById("srcStoreIds").value = "";
+        document.getElementById("srcBlockIds").value = "";
         document.getElementById("storeIds").value = "";
         document.getElementById("blockName").value = "";
         document.getElementById("blockCodeCreate").value = "";
@@ -642,6 +785,12 @@
       const { count: pairCountVal } = parsePairs(
         document.getElementById("storeIdsUpdate"),
         document.getElementById("blockIdsUpdate"),
+        100,
+      );
+      const { count: srcCountVal } = parsePairs(
+        document.getElementById("srcStoreIds"),
+        document.getElementById("srcBlockIds"),
+        20,
       );
 
       const data = new FormData(form);
@@ -652,13 +801,22 @@
           if (snapMode === "update") {
             updateUpdatePairCount();
             updateSubmitState();
+          } else if (snapMode === "create_from_blocks") {
+            updateSrcPairCount();
+            updateStoreCount();
+            updateSubmitState();
           } else {
             updateStoreCount();
             updateSubmitState();
           }
-          const extras = snapMode === "create"
-            ? [`Block Name: ${blockNameVal}`, `Store IDs : ${storeCountVal}`]
-            : [`Pairs     : ${pairCountVal}`];
+          let extras;
+          if (snapMode === "create") {
+            extras = [`Block Name: ${blockNameVal}`, `Store IDs : ${storeCountVal}`];
+          } else if (snapMode === "create_from_blocks") {
+            extras = [`소스 pairs : ${srcCountVal}`, `타겟 stores: ${storeCountVal}`];
+          } else {
+            extras = [`Pairs     : ${pairCountVal}`];
+          }
           downloadLog(logLines, snapMode, extras);
         },
         (text, status) => logLines.push({ text, status }),
