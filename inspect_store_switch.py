@@ -18,13 +18,25 @@ def main(email, password, store_id):
 
         def on_request(req):
             if req.method in ("POST", "PUT", "PATCH", "GET") and "sixshop" in req.url:
-                requests_log.append({
+                entry = {
                     "method": req.method,
                     "url": req.url,
                     "storeid": req.headers.get("storeid", ""),
-                    "auth": req.headers.get("authorization", "")[:40] + "..." if req.headers.get("authorization") else "",
-                })
+                    "auth": req.headers.get("authorization", "")[:60] + "..." if req.headers.get("authorization") else "",
+                    "payload": req.post_data or "",
+                }
+                requests_log.append(entry)
                 print(f"  [REQ] {req.method} {req.url[:80]}  storeid={req.headers.get('storeid', '-')}")
+
+        def on_response(res):
+            if "owner/auth/store" in res.url:
+                try:
+                    body = res.text()
+                    print(f"\n  [RES] {res.url}")
+                    print(f"  status  : {res.status}")
+                    print(f"  body    : {body[:1000]}")
+                except Exception as e:
+                    print(f"  [RES] error reading body: {e}")
 
         def on_framenavigated(frame):
             if frame == page.main_frame:
@@ -32,6 +44,7 @@ def main(email, password, store_id):
                 print(f"  [NAV] {frame.url}")
 
         page.on("request", on_request)
+        page.on("response", on_response)
         page.on("framenavigated", on_framenavigated)
 
         print("Logging in...")
@@ -68,13 +81,15 @@ def main(email, password, store_id):
         for u in url_log:
             print(f"  {u}")
 
-        print("\n--- All sixshop network requests (storeid shown) ---")
-        seen = set()
+        print("\n--- Store switch API calls (payload + cookies) ---")
+        switch_urls = ["owner/auth/store", "api/change"]
         for r in requests_log:
-            key = f"{r['method']} {r['url'][:80]}  storeid={r['storeid']}"
-            if key not in seen:
-                seen.add(key)
-                print(f"  {key}")
+            if any(u in r["url"] for u in switch_urls):
+                print(f"\n  {r['method']} {r['url']}")
+                print(f"  storeid : {r['storeid']}")
+                print(f"  auth    : {r['auth']}")
+                print(f"  payload : {r['payload']}")
+                print(f"  cookies : {r['cookies'][:300]}")
 
         browser.close()
 

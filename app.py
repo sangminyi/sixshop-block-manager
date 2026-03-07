@@ -1,3 +1,4 @@
+import base64
 import json
 import threading
 import requests as http
@@ -14,49 +15,92 @@ app = Flask(__name__)
 automation_lock = threading.Lock()
 
 
+def decode_jwt(token):
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (4 - len(payload) % 4)
+        return json.loads(base64.b64decode(payload))
+    except Exception:
+        return {}
 
-def login_and_capture_token(page, email, password, store_id):
-    """Log in, switch to the correct store via UI, and capture the Bearer token.
-    Returns bearer_token or None on failure."""
-    captured = {}
-    capturing = False
 
-    def on_request(req):
-        if not capturing or captured.get("token"):
-            return
-        auth = req.headers.get("authorization", "")
-        if auth.startswith("Bearer "):
-            captured["token"] = auth[len("Bearer "):]
 
-    page.on("request", on_request)
+def login_and_get_token(page, email, password, store_id):
+    """Log in via browser, switch store via API if needed, and return the Bearer token.
+    Uses page.evaluate() for store switch so the browser session is updated correctly.
+    Returns (bearer_token, error) tuple."""
 
     page.goto("https://store.sixshop.com/auth/login", wait_until="networkidle")
     page.locator('input[type="email"], input[type="text"], input[name*="email"], input[name*="id"]').first.fill(email)
     page.locator('input[type="password"]').first.fill(password)
+
     page.keyboard.press("Enter")
     page.wait_for_url(lambda url: "login" not in url, timeout=15000)
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(1000)
 
-    # Detect the default (currently active) store
-    current_store = page.locator(".sc-908dea85-1 span.sc-908dea85-4").first.text_content().strip()
+    # Read token from localStorage — this is what the browser uses for API calls
+    try:
+        user_data = json.loads(page.evaluate("() => localStorage.getItem('user')") or "{}")
+        initial_token = user_data.get("userToken")
+    except Exception as e:
+        return None, f"localstorage_parse_error: {e}"
 
-    if current_store.lower() != store_id.lower():
-        # Switch to the requested store via UI
-        page.locator("a.sc-908dea85-0").first.click()
-        page.locator("button .sc-aa391376-1 span.sc-aa391376-5.GpgPy").first.wait_for(state="visible", timeout=10000)
-        store_span = page.locator(f"button .sc-aa391376-1 span.sc-aa391376-5.GpgPy:has-text('{store_id}')")
-        store_span.wait_for(state="visible", timeout=5000)
-        store_span.click()
-        page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(2000)
+    if not initial_token:
+        return None, "no_token_in_localstorage"
 
-    # Start capturing token only now (correct store is active)
-    capturing = True
+    # Detect current store from the landing URL
+    current_store = page.url.rstrip("/").split("/")[-1]
 
-    # Trigger authenticated requests to capture the Bearer token
-    page.goto("https://store.sixshop.com/editor/block-maker", wait_until="networkidle")
-    page.wait_for_timeout(2000)
+    if current_store.lower() == store_id.lower():
+        return initial_token, None
 
-    return captured.get("token")
+    # Intercept the store-switch API response to capture the new token.
+    # We let the browser's own UI trigger the switch so all HTTP-only cookies
+    # travel correctly across domains (storemanager-be.sixshop.io etc.).
+    captured = {"token": None}
+
+    def on_response(response):
+        if "owner/auth/store" in response.url and response.status == 200:
+            try:
+                body = response.json()
+                t = body.get("data", {}).get("userToken")
+                if t:
+                    captured["token"] = t
+            except Exception:
+                pass
+
+    page.on("response", on_response)
+
+    # Open the store switcher — find the element showing the current store name.
+    # Uses text-based selectors so class names don't matter.
+    switcher = page.locator(
+        f"a:has-text('{current_store}'), button:has-text('{current_store}')"
+    ).first
+    switcher.wait_for(state="visible", timeout=10000)
+    switcher.click()
+
+    # Click the target store button by its visible text.
+    target = page.get_by_role("button").filter(has_text=store_id).first
+    target.wait_for(state="visible", timeout=10000)
+    target.click()
+
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(1000)
+    page.remove_listener("response", on_response)
+
+    if not captured["token"]:
+        # Fallback: read updated token from localStorage
+        try:
+            user_data = json.loads(page.evaluate("() => localStorage.getItem('user')") or "{}")
+            captured["token"] = user_data.get("userToken")
+        except Exception:
+            pass
+
+    if not captured["token"]:
+        return None, "no_token_after_store_switch"
+
+    return captured["token"], None
 
 
 def run_automation(email, password, store_id, block_name, block_code, block_id=None):
@@ -75,13 +119,13 @@ def run_automation(email, password, store_id, block_name, block_code, block_id=N
             # Step 1: Login
             yield msg(f"Logging in and switching to store '{store_id}'...")
             try:
-                bearer_token = login_and_capture_token(page, email, password, store_id)
+                bearer_token, err = login_and_get_token(page, email, password, store_id)
             except PlaywrightTimeoutError:
                 yield msg("Login failed or timed out.", "error")
                 return
 
             if not bearer_token:
-                yield msg("Logged in but could not capture auth token. Try again.", "error")
+                yield msg(f"Could not get auth token: {err}", "error")
                 return
 
             yield msg(f"Logged in. Active store: {store_id}", "success")
