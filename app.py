@@ -158,7 +158,7 @@ def run_automation(email, password, store_id, block_name, block_code, block_id=N
                 return
 
             else:
-                # CREATE mode: login with store switching, then browser automation
+                # CREATE mode: login with store switching, then create via API
                 yield msg(f"Logging in and switching to store '{store_id}'...")
                 try:
                     bearer_token, err = login_and_get_token(page, email, password, store_id)
@@ -169,54 +169,28 @@ def run_automation(email, password, store_id, block_name, block_code, block_id=N
                     yield msg(f"Could not get auth token: {err}", "error")
                     return
                 yield msg(f"Logged in. Active store: {store_id}", "success")
-
-                yield msg("Navigating to block-maker...")
-                page.goto("https://store.sixshop.com/editor/block-maker", wait_until="networkidle")
-
-                yield msg("Clicking 블록 추가 button...")
-                add_button = page.locator('[class*="AddButton"]').first
-                add_button.wait_for(state="visible", timeout=10000)
-                add_button.click()
-
-                yield msg(f"Entering block name: {block_name}")
-                name_input = page.locator('input[name="blockName"]')
-                name_input.wait_for(state="visible", timeout=10000)
-                name_input.fill(block_name)
-
-                yield msg("Clicking 추가 button...")
-                confirm_btn = page.locator('button[data-modal-action="true"]')
-                confirm_btn.wait_for(state="visible", timeout=10000)
-                confirm_btn.click()
-
-                yield msg("Waiting for block page to load...")
-                try:
-                    page.wait_for_url(
-                        lambda url: "block-maker" in url and "id=" in url,
-                        timeout=15000,
-                    )
-                except PlaywrightTimeoutError:
-                    yield msg("Did not redirect to block page in time.", "error")
-                    return
-
-                current_url = page.url
-                new_block_id = current_url.split("id=")[-1]
-                yield msg(f"Block created! ID: {new_block_id}", "success")
-                page.wait_for_load_state("networkidle")
                 browser.close()
 
-                yield msg("Saving block code via API...")
-                api_url = f"https://storefront-blockmaker-service.sixshop.io/v1/block-components/{new_block_id}"
+                yield msg(f"Creating block '{block_name}' via API...")
                 headers = {
                     "Authorization": f"Bearer {bearer_token}",
                     "storeid": store_id,
                     "bff-access-key": BFF_ACCESS_KEY,
                     "Content-Type": "application/json",
                 }
-                resp = http.put(api_url, headers=headers, json={"content": block_code, "property": block_property, "settings": block_settings}, timeout=15)
+                resp = http.post(
+                    "https://storefront-blockmaker-service.sixshop.io/v1/block-components",
+                    headers=headers,
+                    json={"title": block_name, "content": block_code, "status": "active", "property": block_property, "settings": block_settings},
+                    timeout=15,
+                )
 
-                if resp.status_code == 200:
-                    yield msg("Block saved successfully!", "success")
-                    yield msg(f"Done. Block URL: {current_url}", "success")
+                if resp.status_code == 201:
+                    data = resp.json()
+                    new_block_id = data.get("_id")
+                    block_url = f"https://store.sixshop.com/editor/block-maker/?id={new_block_id}" if new_block_id else "https://store.sixshop.com/editor/block-maker"
+                    yield msg(f"Block created! ID: {new_block_id}", "success")
+                    yield msg(f"Done. Block URL: {block_url}", "success")
                 else:
                     yield msg(f"API error {resp.status_code}: {resp.text[:300]}", "error")
                 return
