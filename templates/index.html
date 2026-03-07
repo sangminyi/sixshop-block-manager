@@ -173,6 +173,9 @@
 
           <label for="blockCodeCreate">블록 코드 (Block Code)</label>
           <textarea id="blockCodeCreate" name="blockCode" placeholder="<!-- paste your code here -->"></textarea>
+
+          <label for="settingsPropertyCreate">Settings &amp; Property</label>
+          <textarea id="settingsPropertyCreate" name="settingsProperty" placeholder='{"settings":[...],"property":{...}}'></textarea>
         </div>
 
         <div id="updateFields" style="display:none">
@@ -181,6 +184,9 @@
 
           <label for="blockCodeUpdate">블록 코드 (Block Code)</label>
           <textarea id="blockCodeUpdate" name="blockCode" placeholder="<!-- paste your code here -->"></textarea>
+
+          <label for="settingsPropertyUpdate">Settings &amp; Property</label>
+          <textarea id="settingsPropertyUpdate" name="settingsProperty" placeholder='{"settings":[...],"property":{...}}'></textarea>
         </div>
 
         <button type="submit" id="submitBtn">블록 생성 시작</button>
@@ -232,9 +238,11 @@
         document.getElementById("storeId").value = "";
         document.getElementById("blockName").value = "";
         document.getElementById("blockCodeCreate").value = "";
+        document.getElementById("settingsPropertyCreate").value = "";
       } else {
         document.getElementById("blockId").value = "";
         document.getElementById("blockCodeUpdate").value = "";
+        document.getElementById("settingsPropertyUpdate").value = "";
       }
 
       log.innerHTML = "";

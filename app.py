@@ -106,8 +106,13 @@ def login_and_get_token(page, email, password, store_id):
     return captured["token"], None
 
 
-def run_automation(email, password, store_id, block_name, block_code, block_id=None):
+def run_automation(email, password, store_id, block_name, block_code, block_id=None, block_property=None, block_settings=None):
     """Generator that yields SSE-formatted status messages."""
+
+    if block_property is None:
+        block_property = {}
+    if block_settings is None:
+        block_settings = []
 
     def msg(text, status="info"):
         data = json.dumps({"text": text, "status": status})
@@ -142,7 +147,7 @@ def run_automation(email, password, store_id, block_name, block_code, block_id=N
                     "bff-access-key": BFF_ACCESS_KEY,
                     "Content-Type": "application/json",
                 }
-                resp = http.put(api_url, headers=headers, json={"content": block_code, "property": {}, "settings": []}, timeout=15)
+                resp = http.put(api_url, headers=headers, json={"content": block_code, "property": block_property, "settings": block_settings}, timeout=15)
 
                 if resp.status_code == 200:
                     block_url = f"https://store.sixshop.com/editor/block-maker/?id={block_id}"
@@ -207,7 +212,7 @@ def run_automation(email, password, store_id, block_name, block_code, block_id=N
                     "bff-access-key": BFF_ACCESS_KEY,
                     "Content-Type": "application/json",
                 }
-                resp = http.put(api_url, headers=headers, json={"content": block_code, "property": {}, "settings": []}, timeout=15)
+                resp = http.put(api_url, headers=headers, json={"content": block_code, "property": block_property, "settings": block_settings}, timeout=15)
 
                 if resp.status_code == 200:
                     yield msg("Block saved successfully!", "success")
@@ -245,6 +250,13 @@ def run():
     block_name = request.form.get("blockName", "").strip()
     block_code = request.form.get("blockCode", "")
 
+    try:
+        sp = json.loads(request.form.get("settingsProperty", "") or "{}")
+    except json.JSONDecodeError:
+        sp = {}
+    block_property = sp.get("property", {})
+    block_settings = sp.get("settings", [])
+
     if not all([email, password, block_code]):
         automation_lock.release()
         return Response(
@@ -265,7 +277,7 @@ def run():
 
     def generate():
         try:
-            yield from run_automation(email, password, store_id, block_name, block_code, block_id=block_id or None)
+            yield from run_automation(email, password, store_id, block_name, block_code, block_id=block_id or None, block_property=block_property, block_settings=block_settings)
         finally:
             automation_lock.release()
 
