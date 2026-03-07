@@ -713,7 +713,7 @@
       const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
       const fileStamp = dateStr.replace(" ", "_").replaceAll(":", "-");
 
-      const modeLabel = { create: "Create", create_from_blocks: "Create (From Block)", update: "Update", delete: "Delete" }[mode] || mode;
+      const modeLabel = { create: "Create (Manual)", create_from_blocks: "Create (From Block)", update: "Update", delete: "Delete" }[mode] || mode;
       const headerLines = [
         `Sixshop Block Manager — ${modeLabel} Log`,
         `Generated : ${dateStr}`,
@@ -730,7 +730,8 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `block-${mode}-${fileStamp}.txt`;
+      const fileMode = mode === "create" ? "create_manual" : mode === "create_from_blocks" ? "create_fromblock" : mode;
+      a.download = `block-${fileMode}-${fileStamp}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
