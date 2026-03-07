@@ -135,6 +135,19 @@
       white-space: nowrap;
     }
 
+    .store-count {
+      font-size: 0.78rem;
+      color: #999;
+      white-space: nowrap;
+    }
+
+    .store-count.over { color: #f44336; }
+
+    textarea.store-ids {
+      min-height: 90px;
+      max-height: 200px;
+    }
+
     .preserve-label input[type="checkbox"] {
       width: auto;
       margin: 0;
@@ -277,8 +290,11 @@
 
         <!-- CREATE FIELDS -->
         <div id="createFields">
-          <label for="storeId">스토어 ID (Store ID)</label>
-          <input type="text" id="storeId" name="storeId" placeholder="your-store-id" autocomplete="off" />
+          <div class="field-header">
+            <label for="storeIds">스토어 ID (Store IDs)</label>
+            <span id="storeCount" class="store-count">0 / 100</span>
+          </div>
+          <textarea id="storeIds" name="storeIds" class="store-ids" placeholder="sangmin&#10;store2&#10;agent"></textarea>
 
           <label for="blockName">블록 이름 (Block Name)</label>
           <input type="text" id="blockName" name="blockName" placeholder="my-block" />
@@ -362,6 +378,8 @@
   </div>
 
   <script>
+    const storeIdsEl  = document.getElementById("storeIds");
+    const storeCountEl = document.getElementById("storeCount");
     const form             = document.getElementById("form");
     const log              = document.getElementById("log");
     const submitBtn        = document.getElementById("submitBtn");
@@ -375,6 +393,18 @@
     const deleteConfirmBox = document.getElementById("deleteConfirmBox");
 
     let currentMode = "create";
+
+    function updateStoreCount() {
+      const ids = storeIdsEl.value.split("\n").map(s => s.trim()).filter(Boolean);
+      const count = ids.length;
+      storeCountEl.textContent = `${count} / 100`;
+      storeCountEl.classList.toggle("over", count > 100);
+      if (currentMode === "create") {
+        submitBtn.textContent = count > 0 ? `블록 생성 시작 (${Math.min(count, 100)}개 스토어)` : "블록 생성 시작";
+      }
+    }
+
+    storeIdsEl.addEventListener("input", updateStoreCount);
 
     function applyPreserveState() {
       document.getElementById("blockTitleUpdate").disabled   = document.getElementById("preserveTitle").checked;
@@ -425,7 +455,7 @@
       deleteBtn.style.display = mode === "delete" ? "block" : "none";
       updateSubmitState();
 
-      if (mode === "create") submitBtn.textContent = "블록 생성 시작";
+      if (mode === "create") updateStoreCount();
       else if (mode === "update") submitBtn.textContent = "블록 업데이트 시작";
 
       deleteConfirmBox.style.display = "none";
@@ -479,7 +509,7 @@
         document.getElementById("settingsPropertyUpdate").value = "";
         document.getElementById("librariesUpdate").value = "";
       } else if (currentMode === "update") {
-        document.getElementById("storeId").value = "";
+        document.getElementById("storeIds").value = "";
         document.getElementById("blockName").value = "";
         document.getElementById("blockCodeCreate").value = "";
         document.getElementById("settingsPropertyCreate").value = "";
@@ -495,7 +525,8 @@
       const response = await fetch("/run", { method: "POST", body: data });
       await streamSSE(response, () => {
         submitBtn.disabled = false;
-        submitBtn.textContent = currentMode === "update" ? "블록 업데이트 시작" : "블록 생성 시작";
+        if (currentMode === "update") submitBtn.textContent = "블록 업데이트 시작";
+        else updateStoreCount();
       });
     });
 
