@@ -87,13 +87,13 @@ def run_bulk_create(email, password, store_ids, block_name, block_code, block_pr
             yield msg(f"{prefix} — Creating block '{block_name}'...")
             try:
                 resp = http.post(
-                    "https://storefront-blockmaker-service.sixshop.io/v1/block-components",
+                    "https://storefront-blockmaker-service.sixshop.io/v1/block-components/bulk",
                     headers=headers,
-                    json={"title": block_name, "content": block_code, "status": "active", "property": block_property, "settings": block_settings, "libraries": block_libraries},
+                    json={"components": [{"title": block_name, "content": block_code, "status": "active", "property": block_property, "settings": block_settings, "libraries": block_libraries}]},
                     timeout=15,
                 )
                 if resp.status_code == 201:
-                    new_block_id = resp.json().get("_id")
+                    new_block_id = resp.json()[0].get("_id")
                     yield msg(f"{prefix} — Block created! ID: {new_block_id}", "success")
                     results.append({"store_id": store_id, "block_id": new_block_id, "success": True})
                 else:
@@ -212,20 +212,20 @@ def run_bulk_create_from_blocks(email, password, source_pairs, target_store_ids)
                 yield msg(f"{tgt_prefix} — 블록 생성 중...")
                 try:
                     resp = http.post(
-                        "https://storefront-blockmaker-service.sixshop.io/v1/block-components",
+                        "https://storefront-blockmaker-service.sixshop.io/v1/block-components/bulk",
                         headers=tgt_headers,
-                        json={
+                        json={"components": [{
                             "title": block_name,
                             "content": block_code,
                             "status": "active",
                             "property": block_property,
                             "settings": block_settings,
                             "libraries": block_libraries,
-                        },
+                        }]},
                         timeout=15,
                     )
                     if resp.status_code == 201:
-                        new_id = resp.json().get("_id")
+                        new_id = resp.json()[0].get("_id")
                         yield msg(f"{tgt_prefix} — 생성 완료! ID: {new_id}", "success")
                         results.append({"src_store": src_store, "src_block": src_block,
                                         "tgt_store": tgt_store, "new_block_id": new_id, "success": True})
