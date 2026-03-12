@@ -511,7 +511,7 @@ def index():
     return render_template("index.html")
 
 
-def _parse_pairs(store_ids_raw, block_ids_raw, limit=100):
+def _parse_pairs(store_ids_raw, block_ids_raw, limit=500):
     store_ids = [s.strip() for s in store_ids_raw.splitlines() if s.strip()]
     block_ids = [s.strip() for s in block_ids_raw.splitlines() if s.strip()]
     if len(store_ids) != len(block_ids):

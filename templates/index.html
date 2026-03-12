@@ -451,7 +451,7 @@
             </div>
           </div>
           <div class="pair-counter-row">
-            <span id="updatePairCount" class="store-count">0 / 100 pairs</span>
+            <span id="updatePairCount" class="store-count">0 / 500 pairs</span>
           </div>
 
           <button type="button" id="classifyBtn">분류 확인</button>
@@ -514,7 +514,7 @@
             </div>
           </div>
           <div class="pair-counter-row">
-            <span id="deletePairCount" class="store-count">0 / 100 pairs</span>
+            <span id="deletePairCount" class="store-count">0 / 500 pairs</span>
           </div>
 
           <div id="deleteConfirmBox" class="confirm-box" style="display:none">
@@ -596,8 +596,8 @@
     // ── Update pair counter ─────────────────────────────────────
     function updateUpdatePairCount() {
       const { storeIds, blockIds, count, mismatch, over, valid } =
-        parsePairs(document.getElementById("storeIdsUpdate"), document.getElementById("blockIdsUpdate"), 100);
-      renderPairCount(document.getElementById("updatePairCount"), storeIds, blockIds, count, mismatch, over, 100);
+        parsePairs(document.getElementById("storeIdsUpdate"), document.getElementById("blockIdsUpdate"), 500);
+      renderPairCount(document.getElementById("updatePairCount"), storeIds, blockIds, count, mismatch, over, 500);
       if (currentMode === "update") {
         submitBtn.textContent = valid ? `블록 업데이트 시작 (${count}개)` : "블록 업데이트 시작";
         updateSubmitState();
@@ -611,8 +611,8 @@
     // ── Delete pair counter ─────────────────────────────────────
     function updateDeletePairCount() {
       const { storeIds, blockIds, count, mismatch, over, valid } =
-        parsePairs(document.getElementById("storeIdsDelete"), document.getElementById("blockIdsDelete"), 100);
-      renderPairCount(document.getElementById("deletePairCount"), storeIds, blockIds, count, mismatch, over, 100);
+        parsePairs(document.getElementById("storeIdsDelete"), document.getElementById("blockIdsDelete"), 500);
+      renderPairCount(document.getElementById("deletePairCount"), storeIds, blockIds, count, mismatch, over, 500);
       deleteBtn.disabled = !valid;
       if (valid) {
         document.getElementById("deleteConfirmMsg").textContent =
@@ -682,7 +682,7 @@
         const { valid } = parsePairs(
           document.getElementById("storeIdsUpdate"),
           document.getElementById("blockIdsUpdate"),
-          100,
+          500,
         );
         submitBtn.disabled = allPreserved || !valid;
       } else if (currentMode === "create_from_blocks") {
@@ -723,7 +723,7 @@
       const { valid } = parsePairs(
         document.getElementById("storeIdsUpdate"),
         document.getElementById("blockIdsUpdate"),
-        100,
+        500,
       );
       if (!valid) {
         alert("스토어 ID와 블록 ID를 올바르게 입력해주세요.");
@@ -935,7 +935,7 @@
       const { count: pairCountVal } = parsePairs(
         document.getElementById("storeIdsUpdate"),
         document.getElementById("blockIdsUpdate"),
-        100,
+        500,
       );
       const { count: srcCountVal } = parsePairs(
         document.getElementById("srcStoreIds"),
