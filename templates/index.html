@@ -187,6 +187,24 @@
       margin-bottom: 16px;
     }
 
+    /* Retry button */
+    #retryBtn {
+      width: 100%;
+      margin-top: 12px;
+      padding: 12px;
+      background: #ff9500;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    #retryBtn:hover { background: #e08600; }
+    #retryBtn:disabled { background: #ffc97a; cursor: not-allowed; }
+
     /* Classify button */
     #classifyBtn {
       width: 100%;
@@ -451,7 +469,7 @@
             </div>
           </div>
           <div class="pair-counter-row">
-            <span id="updatePairCount" class="store-count">0 / 100 pairs</span>
+            <span id="updatePairCount" class="store-count">0 / 500 pairs</span>
           </div>
 
           <button type="button" id="classifyBtn">분류 확인</button>
@@ -514,7 +532,7 @@
             </div>
           </div>
           <div class="pair-counter-row">
-            <span id="deletePairCount" class="store-count">0 / 100 pairs</span>
+            <span id="deletePairCount" class="store-count">0 / 500 pairs</span>
           </div>
 
           <div id="deleteConfirmBox" class="confirm-box" style="display:none">
@@ -532,6 +550,7 @@
     </div>
 
     <div id="log"></div>
+    <button type="button" id="retryBtn" style="display:none"></button>
   </div>
 
   <script>
@@ -539,6 +558,7 @@
     const storeCountEl  = document.getElementById("storeCount");
     const form          = document.getElementById("form");
     const log           = document.getElementById("log");
+    const retryBtn      = document.getElementById("retryBtn");
     const submitBtn     = document.getElementById("submitBtn");
     const deleteBtn     = document.getElementById("deleteBtn");
     const createFields  = document.getElementById("createFields");
@@ -596,8 +616,8 @@
     // ── Update pair counter ─────────────────────────────────────
     function updateUpdatePairCount() {
       const { storeIds, blockIds, count, mismatch, over, valid } =
-        parsePairs(document.getElementById("storeIdsUpdate"), document.getElementById("blockIdsUpdate"), 100);
-      renderPairCount(document.getElementById("updatePairCount"), storeIds, blockIds, count, mismatch, over, 100);
+        parsePairs(document.getElementById("storeIdsUpdate"), document.getElementById("blockIdsUpdate"), 500);
+      renderPairCount(document.getElementById("updatePairCount"), storeIds, blockIds, count, mismatch, over, 500);
       if (currentMode === "update") {
         submitBtn.textContent = valid ? `블록 업데이트 시작 (${count}개)` : "블록 업데이트 시작";
         updateSubmitState();
@@ -611,8 +631,8 @@
     // ── Delete pair counter ─────────────────────────────────────
     function updateDeletePairCount() {
       const { storeIds, blockIds, count, mismatch, over, valid } =
-        parsePairs(document.getElementById("storeIdsDelete"), document.getElementById("blockIdsDelete"), 100);
-      renderPairCount(document.getElementById("deletePairCount"), storeIds, blockIds, count, mismatch, over, 100);
+        parsePairs(document.getElementById("storeIdsDelete"), document.getElementById("blockIdsDelete"), 500);
+      renderPairCount(document.getElementById("deletePairCount"), storeIds, blockIds, count, mismatch, over, 500);
       deleteBtn.disabled = !valid;
       if (valid) {
         document.getElementById("deleteConfirmMsg").textContent =
@@ -682,7 +702,7 @@
         const { valid } = parsePairs(
           document.getElementById("storeIdsUpdate"),
           document.getElementById("blockIdsUpdate"),
-          100,
+          500,
         );
         submitBtn.disabled = allPreserved || !valid;
       } else if (currentMode === "create_from_blocks") {
@@ -712,6 +732,32 @@
       });
     });
 
+    // ── Retry logic ─────────────────────────────────────────────
+    async function triggerRetry(pairs) {
+      retryBtn.style.display = "none";
+      document.getElementById("storeIdsUpdate").value = pairs.map(p => p[0]).join("\n");
+      document.getElementById("blockIdsUpdate").value = pairs.map(p => p[1]).join("\n");
+      updateUpdatePairCount();
+
+      log.innerHTML = "";
+      log.style.display = "block";
+      submitBtn.disabled = true;
+      submitBtn.textContent = "실행 중...";
+
+      const logLines = [];
+      const data = new FormData(form);
+      const response = await fetch("/run", { method: "POST", body: data });
+      await streamSSE(
+        response,
+        () => {
+          updateUpdatePairCount();
+          updateSubmitState();
+          downloadLog(logLines, "update", [`Pairs: ${pairs.length} (재시도)`]);
+        },
+        (text, status) => logLines.push({ text, status }),
+      );
+    }
+
     // ── Classify button ─────────────────────────────────────────
     document.getElementById("classifyBtn").addEventListener("click", async () => {
       const email = document.getElementById("email").value.trim();
@@ -723,7 +769,7 @@
       const { valid } = parsePairs(
         document.getElementById("storeIdsUpdate"),
         document.getElementById("blockIdsUpdate"),
-        100,
+        500,
       );
       if (!valid) {
         alert("스토어 ID와 블록 ID를 올바르게 입력해주세요.");
@@ -848,9 +894,16 @@
         for (const line of lines) {
           if (!line.startsWith("data:")) continue;
           try {
-            const { text, status } = JSON.parse(line.slice(5).trim());
-            appendLog(text, status);
-            if (onLine) onLine(text, status);
+            const parsed = JSON.parse(line.slice(5).trim());
+            const { text, status, pairs } = parsed;
+            if (status === "retryable") {
+              retryBtn.textContent = `실패 항목 재시도 (${pairs.length}개)`;
+              retryBtn.style.display = "block";
+              retryBtn.onclick = () => triggerRetry(pairs);
+            } else {
+              appendLog(text, status);
+              if (onLine) onLine(text, status);
+            }
           } catch (_) {}
         }
       }
@@ -891,6 +944,7 @@
     // ── Form submit (Create / Update) ───────────────────────────
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
+      retryBtn.style.display = "none";
 
       // Clear inactive fields so they don't bleed into FormData
       if (currentMode === "create") {
@@ -935,7 +989,7 @@
       const { count: pairCountVal } = parsePairs(
         document.getElementById("storeIdsUpdate"),
         document.getElementById("blockIdsUpdate"),
-        100,
+        500,
       );
       const { count: srcCountVal } = parsePairs(
         document.getElementById("srcStoreIds"),
