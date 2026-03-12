@@ -262,6 +262,7 @@ def run_bulk_update(
     email, password, pairs, block_code, block_property, block_settings, block_libraries,
     block_title=None,
     preserve_title=False, preserve_code=False, preserve_settings=False, preserve_libraries=False,
+    filter_type="all",
 ):
     """Generator for UPDATE mode — runs sequentially across all (store_id, block_id) pairs."""
 
@@ -271,12 +272,13 @@ def run_bulk_update(
 
     total = len(pairs)
     results = []
+    skip_count = 0
 
     try:
         for i, (store_id, block_id) in enumerate(pairs, 1):
             prefix = f"[{i}/{total}] {store_id} / {block_id}"
 
-            yield msg(f"{prefix} — Logging in...")
+            yield msg(f"{prefix} — 로그인 중...")
             bearer_token, err = get_auth_token(store_id, email, password)
             if not bearer_token:
                 err_text = f"Login failed: {err}"
@@ -295,12 +297,28 @@ def run_bulk_update(
             cur_title, cur_code = block_title, block_code
             cur_property, cur_settings, cur_libraries = block_property, block_settings, block_libraries
 
-            if preserve_title or preserve_code or preserve_settings or preserve_libraries:
-                yield msg(f"{prefix} — Fetching current block data...")
+            need_fetch = preserve_title or preserve_code or preserve_settings or preserve_libraries or filter_type != "all"
+
+            if need_fetch:
+                yield msg(f"{prefix} — 블록 정보 가져오는 중...")
                 try:
                     get_resp = http.get(api_url, headers=headers, timeout=15)
                     if get_resp.status_code == 200:
                         current = get_resp.json()
+
+                        # 필터 타입 체크
+                        if filter_type != "all":
+                            has_theme_id = bool(current.get("meta", {}).get("themeId"))
+                            is_template = has_theme_id
+                            if filter_type == "template" and not is_template:
+                                yield msg(f"{prefix} — 스킵 (일반 블록)", "info")
+                                skip_count += 1
+                                continue
+                            elif filter_type == "non_template" and is_template:
+                                yield msg(f"{prefix} — 스킵 (템플릿 블록)", "info")
+                                skip_count += 1
+                                continue
+
                         if preserve_title:
                             cur_title = current.get("title", "")
                         if preserve_code:
@@ -310,13 +328,12 @@ def run_bulk_update(
                             cur_settings = current.get("settings", [])
                         if preserve_libraries:
                             cur_libraries = current.get("libraries", [])
-                        yield msg(f"{prefix} — Current values loaded.", "success")
                     else:
                         yield msg(f"{prefix} — Warning: Could not fetch ({get_resp.status_code}). Using provided values.", "info")
                 except Exception as e:
                     yield msg(f"{prefix} — Warning: Fetch error: {e}. Using provided values.", "info")
 
-            yield msg(f"{prefix} — Updating...")
+            yield msg(f"{prefix} — 업데이트 중...")
             try:
                 resp = http.put(api_url, headers=headers, json={
                     "title": cur_title,
@@ -341,11 +358,13 @@ def run_bulk_update(
     except Exception as e:
         yield msg(f"Unexpected error: {e}", "error")
 
-    if results:
+    if results or skip_count:
         success_count = sum(1 for r in results if r["success"])
         completed = len(results)
-        incomplete = total - completed
+        incomplete = total - completed - skip_count
         header = f"결과 요약  {success_count}/{completed} 성공"
+        if skip_count:
+            header += f"  ({skip_count}개 스킵)"
         if incomplete:
             header += f"  ({incomplete}개 미완료)"
         yield msg("─" * 48)
@@ -357,6 +376,68 @@ def run_bulk_update(
             else:
                 yield msg(f"{label}  —  {r['error']}", "error")
         yield msg("─" * 48)
+
+
+def run_bulk_classify(email, password, pairs):
+    """Generator for CLASSIFY mode — fetches each block and classifies as template or non-template."""
+
+    def msg(text, status="info"):
+        data = json.dumps({"text": text, "status": status})
+        return f"data: {data}\n\n"
+
+    total = len(pairs)
+    template_count = 0
+    non_template_count = 0
+    error_count = 0
+
+    try:
+        for i, (store_id, block_id) in enumerate(pairs, 1):
+            prefix = f"[{i}/{total}] {store_id} / {block_id}"
+
+            bearer_token, err = get_auth_token(store_id, email, password)
+            if not bearer_token:
+                yield msg(f"{prefix}  —  로그인 실패: {err}", "error")
+                error_count += 1
+                continue
+
+            headers = {
+                "Authorization": f"Bearer {bearer_token}",
+                "storeid": store_id,
+                "bff-access-key": BFF_ACCESS_KEY,
+                "Content-Type": "application/json",
+            }
+
+            try:
+                resp = http.get(
+                    f"https://storefront-blockmaker-service.sixshop.io/v1/block-components/{block_id}",
+                    headers=headers,
+                    timeout=15,
+                )
+                if resp.status_code == 200:
+                    block = resp.json()
+                    theme_id = block.get("meta", {}).get("themeId")
+                    if theme_id:
+                        yield msg(f"{prefix}  —  템플릿 블록  (themeId: {theme_id})", "success")
+                        template_count += 1
+                    else:
+                        yield msg(f"{prefix}  —  일반 블록")
+                        non_template_count += 1
+                else:
+                    yield msg(f"{prefix}  —  API 오류 {resp.status_code}", "error")
+                    error_count += 1
+            except Exception as e:
+                yield msg(f"{prefix}  —  요청 오류: {e}", "error")
+                error_count += 1
+
+    except Exception as e:
+        yield msg(f"예상치 못한 오류: {e}", "error")
+
+    yield msg("─" * 48)
+    summary = f"분류 요약  템플릿 블록 {template_count}개  /  일반 블록 {non_template_count}개"
+    if error_count:
+        summary += f"  /  오류 {error_count}개"
+    yield msg(summary)
+    yield msg("─" * 48)
 
 
 def run_bulk_delete(email, password, pairs):
@@ -477,6 +558,7 @@ def run():
         preserve_code = request.form.get("preserveCode") == "on"
         preserve_settings = request.form.get("preserveSettings") == "on"
         preserve_libraries = request.form.get("preserveLibraries") == "on"
+        filter_type = request.form.get("filterType", "all")
 
         try:
             sp = json.loads(request.form.get("settingsProperty", "") or "{}")
@@ -501,6 +583,7 @@ def run():
                     block_title=block_title or None,
                     preserve_title=preserve_title, preserve_code=preserve_code,
                     preserve_settings=preserve_settings, preserve_libraries=preserve_libraries,
+                    filter_type=filter_type,
                 )
             finally:
                 automation_lock.release()
@@ -579,6 +662,44 @@ def run():
                 )
             finally:
                 automation_lock.release()
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+
+@app.route("/classify", methods=["POST"])
+def classify_route():
+    if not automation_lock.acquire(blocking=False):
+        return Response(
+            'data: {"text": "Another automation is already running. Please wait.", "status": "error"}\n\n',
+            mimetype="text/event-stream",
+        )
+
+    email = request.form.get("email", "").strip()
+    password = request.form.get("password", "").strip()
+
+    if not all([email, password]):
+        automation_lock.release()
+        return Response(
+            'data: {"text": "Email and password are required.", "status": "error"}\n\n',
+            mimetype="text/event-stream",
+        )
+
+    pairs, err = _parse_pairs(
+        request.form.get("storeIdsUpdate", ""),
+        request.form.get("blockIdsUpdate", ""),
+    )
+    if err:
+        automation_lock.release()
+        return Response(
+            f'data: {{"text": "{err}", "status": "error"}}\n\n',
+            mimetype="text/event-stream",
+        )
+
+    def generate():
+        try:
+            yield from run_bulk_classify(email, password, pairs)
+        finally:
+            automation_lock.release()
 
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
 

@@ -187,6 +187,80 @@
       margin-bottom: 16px;
     }
 
+    /* Classify button */
+    #classifyBtn {
+      width: 100%;
+      padding: 10px;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-bottom: 16px;
+    }
+
+    #classifyBtn:hover { background: #e8e8ed; }
+    #classifyBtn:disabled { color: #bbb; cursor: not-allowed; }
+
+    #classifyResult {
+      background: #1e1e1e;
+      border-radius: 8px;
+      padding: 14px 16px;
+      color: #ccc;
+      font-family: "SF Mono", "Fira Code", Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      max-height: 220px;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+
+    #classifyResult .log-line { margin-bottom: 2px; }
+
+    /* Filter toggle */
+    .filter-toggle {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .filter-toggle-label {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #555;
+      white-space: nowrap;
+    }
+
+    .filter-toggle-buttons {
+      display: flex;
+      background: #f0f0f5;
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .filter-btn {
+      padding: 5px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      color: #888;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .filter-btn.active {
+      background: #fff;
+      color: #1d1d1f;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+
     /* Submit button */
     button[type="submit"] {
       width: 100%;
@@ -378,6 +452,19 @@
           </div>
           <div class="pair-counter-row">
             <span id="updatePairCount" class="store-count">0 / 100 pairs</span>
+          </div>
+
+          <button type="button" id="classifyBtn">분류 확인</button>
+          <div id="classifyResult" style="display:none"></div>
+
+          <input type="hidden" id="filterTypeInput" name="filterType" value="all" />
+          <div class="filter-toggle">
+            <span class="filter-toggle-label">업데이트 대상</span>
+            <div class="filter-toggle-buttons">
+              <button type="button" class="filter-btn active" data-filter="all">전체</button>
+              <button type="button" class="filter-btn" data-filter="template">템플릿 블록만</button>
+              <button type="button" class="filter-btn" data-filter="non_template">일반 블록만</button>
+            </div>
           </div>
 
           <div class="field-header">
@@ -622,6 +709,69 @@
       document.getElementById(id).addEventListener("change", () => {
         applyPreserveState();
         updateSubmitState();
+      });
+    });
+
+    // ── Classify button ─────────────────────────────────────────
+    document.getElementById("classifyBtn").addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+      if (!email || !password) {
+        alert("이메일과 비밀번호를 입력해주세요.");
+        return;
+      }
+      const { valid } = parsePairs(
+        document.getElementById("storeIdsUpdate"),
+        document.getElementById("blockIdsUpdate"),
+        100,
+      );
+      if (!valid) {
+        alert("스토어 ID와 블록 ID를 올바르게 입력해주세요.");
+        return;
+      }
+
+      const classifyResult = document.getElementById("classifyResult");
+      classifyResult.innerHTML = "";
+      classifyResult.style.display = "block";
+      const classifyBtn = document.getElementById("classifyBtn");
+      classifyBtn.disabled = true;
+      classifyBtn.textContent = "분류 확인 중...";
+
+      const data = new FormData(form);
+      const response = await fetch("/classify", { method: "POST", body: data });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            const { text, status } = JSON.parse(line.slice(5).trim());
+            const div = document.createElement("div");
+            div.className = `log-line ${status || "info"}`;
+            div.textContent = text;
+            classifyResult.appendChild(div);
+            classifyResult.scrollTop = classifyResult.scrollHeight;
+          } catch (_) {}
+        }
+      }
+
+      classifyBtn.disabled = false;
+      classifyBtn.textContent = "분류 확인";
+    });
+
+    // ── Filter toggle ───────────────────────────────────────────
+    document.querySelectorAll(".filter-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("filterTypeInput").value = btn.dataset.filter;
       });
     });
 
