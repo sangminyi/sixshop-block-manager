@@ -187,6 +187,24 @@
       margin-bottom: 16px;
     }
 
+    /* Stop button */
+    #stopBtn {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 10px;
+      background: #fff;
+      color: #f44336;
+      border: 1.5px solid #f44336;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    #stopBtn:hover { background: #f44336; color: #fff; }
+    #stopBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
     /* Retry button */
     #retryBtn {
       width: 100%;
@@ -549,6 +567,7 @@
       </form>
     </div>
 
+    <button type="button" id="stopBtn" style="display:none">중지</button>
     <div id="log"></div>
     <button type="button" id="retryBtn" style="display:none"></button>
   </div>
@@ -559,6 +578,13 @@
     const form          = document.getElementById("form");
     const log           = document.getElementById("log");
     const retryBtn      = document.getElementById("retryBtn");
+    const stopBtn       = document.getElementById("stopBtn");
+
+    stopBtn.addEventListener("click", async () => {
+      stopBtn.disabled = true;
+      stopBtn.textContent = "중지 중...";
+      await fetch("/stop", { method: "POST" });
+    });
     const submitBtn     = document.getElementById("submitBtn");
     const deleteBtn     = document.getElementById("deleteBtn");
     const createFields  = document.getElementById("createFields");
@@ -979,6 +1005,11 @@
 
       log.innerHTML = "";
       log.style.display = "block";
+      if (currentMode === "update") {
+        stopBtn.style.display = "block";
+        stopBtn.disabled = false;
+        stopBtn.textContent = "중지";
+      }
       submitBtn.disabled = true;
       submitBtn.textContent = "실행 중...";
 
@@ -1002,6 +1033,7 @@
       await streamSSE(
         response,
         () => {
+          stopBtn.style.display = "none";
           if (snapMode === "update") {
             updateUpdatePairCount();
             updateSubmitState();
@@ -1042,6 +1074,9 @@
       deleteConfirmBox.style.display = "none";
       log.innerHTML = "";
       log.style.display = "block";
+      stopBtn.style.display = "block";
+      stopBtn.disabled = false;
+      stopBtn.textContent = "중지";
 
       const confirmBtn = document.getElementById("confirmDeleteBtn");
       deleteBtn.disabled = true;
@@ -1058,6 +1093,7 @@
       await streamSSE(
         response,
         () => {
+          stopBtn.style.display = "none";
           deleteBtn.disabled = false;
           confirmBtn.disabled = false;
           updateDeletePairCount();

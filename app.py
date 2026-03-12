@@ -11,6 +11,7 @@ BFF_ACCESS_KEY = (
 
 app = Flask(__name__)
 automation_lock = threading.Lock()
+stop_event = threading.Event()
 
 
 def get_auth_token(store_id, email, password):
@@ -276,6 +277,10 @@ def run_bulk_update(
 
     try:
         for i, (store_id, block_id) in enumerate(pairs, 1):
+            if stop_event.is_set():
+                yield msg("⚠ 중지 요청됨 — 작업을 중단합니다.", "error")
+                break
+
             prefix = f"[{i}/{total}] {store_id} / {block_id}"
 
             yield msg(f"{prefix} — 로그인 중...")
@@ -457,6 +462,10 @@ def run_bulk_delete(email, password, pairs):
 
     try:
         for i, (store_id, block_id) in enumerate(pairs, 1):
+            if stop_event.is_set():
+                yield msg("⚠ 중지 요청됨 — 작업을 중단합니다.", "error")
+                break
+
             prefix = f"[{i}/{total}] {store_id} / {block_id}"
 
             yield msg(f"{prefix} — Logging in...")
@@ -533,6 +542,7 @@ def run():
             'data: {"text": "Another automation is already running. Please wait.", "status": "error"}\n\n',
             mimetype="text/event-stream",
         )
+    stop_event.clear()
 
     email = request.form.get("email", "").strip()
     password = request.form.get("password", "").strip()
@@ -716,6 +726,7 @@ def delete_route():
             'data: {"text": "Another automation is already running. Please wait.", "status": "error"}\n\n',
             mimetype="text/event-stream",
         )
+    stop_event.clear()
 
     email = request.form.get("email", "").strip()
     password = request.form.get("password", "").strip()
@@ -745,6 +756,12 @@ def delete_route():
             automation_lock.release()
 
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+
+@app.route("/stop", methods=["POST"])
+def stop_route():
+    stop_event.set()
+    return "", 204
 
 
 if __name__ == "__main__":
