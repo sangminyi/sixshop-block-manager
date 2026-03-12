@@ -377,6 +377,11 @@ def run_bulk_update(
                 yield msg(f"{label}  —  {r['error']}", "error")
         yield msg("─" * 48)
 
+        failed_pairs = [[r["store_id"], r["block_id"]] for r in results if not r["success"]]
+        if failed_pairs:
+            data = json.dumps({"text": f"실패 항목 {len(failed_pairs)}개 재시도 가능", "status": "retryable", "pairs": failed_pairs})
+            yield f"data: {data}\n\n"
+
 
 def run_bulk_classify(email, password, pairs):
     """Generator for CLASSIFY mode — fetches each block and classifies as template or non-template."""
@@ -511,7 +516,7 @@ def index():
     return render_template("index.html")
 
 
-def _parse_pairs(store_ids_raw, block_ids_raw, limit=100):
+def _parse_pairs(store_ids_raw, block_ids_raw, limit=500):
     store_ids = [s.strip() for s in store_ids_raw.splitlines() if s.strip()]
     block_ids = [s.strip() for s in block_ids_raw.splitlines() if s.strip()]
     if len(store_ids) != len(block_ids):
